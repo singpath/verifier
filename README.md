@@ -1,5 +1,7 @@
 # Verifier for SingPath.com
 
+[![Build Status](https://travis-ci.org/singpath/verifier.svg?branch=master)](https://travis-ci.org/singpath/verifier)
+
 Pull verifier task from a Firebase queue and run them inside container.
 
 It consists of a daemon watching for task added to

@@ -38,7 +38,7 @@ In every terminal, configure docker the use that machine:
 eval $(docker-machine env default)
 ```
 
-### Development
+### Setup
 
 Clone the repository and install node dependencies:
 ```shell
@@ -55,10 +55,10 @@ To run the queue worker:
     --promtp-secret
 ```
 
-    Note:
+  Note:
 
-    You can save the secret and endpoint in a .singpathrc json file. Run
-    `./bin/verifier -h` for more information.
+  You can save the secret and endpoint in a .singpathrc json file. Run
+  `./bin/verifier -h` for more information.
 
 
 To push task to the queue:
@@ -73,13 +73,13 @@ tests: |
   1
 solution: |
   foo = 1
-'```
+'
+```
 
+  Note:
 
-    Note:
-
-    You could push the content of a file with
-    `./bin/verifier push "$(cat solutions.yaml)"`.
+  You could push the content of a file with
+  `./bin/verifier push "$(cat solutions.yaml)"`.
 
 
 ### Running the daemon in a container

@@ -53,40 +53,40 @@ VirtualBox driver. You can install `docker` and `docker-machine` using
 for many VM provider we will use Google Cloud Engine in this example.
 
 1. Create a new docker host:
-        ```shell
-        export PROJECT_ID="your-google-project-id"
-        docker-machine create --driver google \
-            --google-project $PROJECT_ID \
-            --google-zone us-central1-a \
-            --google-machine-type f1-micro \
-            remote-docker
-        ```
+    ```shell
+    export PROJECT_ID="your-google-project-id"
+    docker-machine create --driver google \
+      --google-project $PROJECT_ID \
+      --google-zone us-central1-a \
+      --google-machine-type f1-micro \
+      remote-docker
+    ```
 
 2. In all your terminals, set your docker client to use this docker machine:
-        ```shell
-        eval "$(docker-machine env remote-docker)"
-        ```
+    ```shell
+    eval "$(docker-machine env remote-docker)"
+    ```
 
 3. Download the verifier client:
-        ```shell
-        curl -O https://raw.githubusercontent.com/singpath/verifier/master/deployment/verifier-machine.py
-        chmod +x verifier-machine.py
-        ```
+    ```shell
+    curl -O https://raw.githubusercontent.com/singpath/verifier/master/deployment/verifier-machine.py
+    chmod +x verifier-machine.py
+    ```
 
 4. Pull the verifier images:
-        ```shell
-        ./verifier-machine pull latest
-        ```
+    ```shell
+    ./verifier-machine pull latest
+    ```
 
 5. Start the verifier daemon on the remote docker machine:
-        ```shell
-        ./verifier-machine start \
-            --docker-group 999 \
-            --firebase-auth-secret xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
-            --firebase-id some-firebase-id \
-            --firebase-queue default \
-            --interactive
-        ```
+    ```shell
+    ./verifier-machine start \
+        --docker-group 999 \
+        --firebase-auth-secret xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
+        --firebase-id some-firebase-id \
+        --firebase-queue default \
+        --interactive
+    ```
 
 Instead of passing those arguments in the command line, you save them in
 `./.singpath-verifiers.json` as a profile. `./.singpath-verifiers.json` can

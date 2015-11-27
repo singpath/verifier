@@ -1,0 +1,3 @@
+node_modules/*
+verifiers/javascript/node_modules/*
+.singpathrc

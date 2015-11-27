@@ -1,0 +1,7 @@
+---
+tests: |
+  >>> x
+  2
+solution: |
+  print(99)
+  x=2

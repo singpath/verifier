@@ -1,0 +1,41 @@
+#!/usr/bin/env node
+'use strict';
+
+const program = require('commander');
+const verifier = require('../src/index');
+
+program.
+  version('0.0.1').
+  description('Run Javascript code against some tests.').
+  arguments('<payload>', 'json encoded "tests" and "solution"').
+  option('-q, --quiet').
+  action(main).
+  parse(process.argv);
+
+function error() {
+  if (program.quiet) {
+    return;
+  }
+
+  console.error.apply(console, arguments);
+}
+
+function main(payload) {
+  let req;
+
+  try {
+    req = JSON.parse(payload);
+  } catch (e) {
+    error('The payload is not json/yaml encoded: "%s".', payload);
+    process.exit(128);
+  }
+
+  if (!req.solution || !req.tests) {
+    error('The payload should have a "solution" and a "tests" fields.');
+    process.exit(129);
+  }
+
+  verifier.testSolution(req.solution, req.tests).then(
+    resp => console.log(JSON.stringify(resp))
+  );
+}

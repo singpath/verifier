@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+docker run -ti --rm --net="none" --cap-drop=ALL singpath/verifier2-java:latest verify "$1"

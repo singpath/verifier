@@ -1,0 +1,6 @@
+---
+tests: |
+  >>> x
+  2
+solution: |
+  y=2

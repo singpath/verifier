@@ -1,0 +1,514 @@
+#!/usr/bin/env node
+/*eslint no-console: 0*/
+'use strict';
+
+const argparse = require('argparse');
+const expect = require('expect.js');
+const Firebase = require('firebase');
+const FirebaseTokenGenerator = require('firebase-token-generator');
+const path = require('path');
+const prompt = require('prompt');
+const spawn = require('child_process').spawn;
+const url = require('url');
+const yaml = require('js-yaml');
+
+const fs = require('../src/promiseFs');
+const packageJson = require('../package.json');
+const verifier = require('../');
+
+const ERROR_NO_ENDPOINT = 'A endpoint is required.';
+const ERROR_NO_SECRET = 'A firebase auth secret is required.';
+const ERROR_INVALID_ENDOPOINT = 'Invalid queue endpoint.';
+
+const HINT_AUTH_SECRET = 'A Firebase auth secret can be found at https://%s.firebaseio.com/?page=Admin';
+
+const DEFAULT_SETTINGS = {
+  endpoint: 'https://singpath-play.firebaseio.com/singpath/queues/default',
+  host: 'unix:///var/run/docker.sock',
+  tls: false
+};
+
+const EPILOG = `Environment variables:
+  SINGPATH_FIREBASE_SECRET  Firebase auth secret.
+  SINGPATH_FIREBASE_QUEUE   Path to the firebase queue.
+                            (default: ${DEFAULT_SETTINGS.endpoint})
+  DOCKER_HOST               Docker daemon socket to connect to.
+                            (default: ${DEFAULT_SETTINGS.host})
+  DOCKER_TLS_VERIFY         Use TLS with the Docker daemon.
+                            (default: 0)
+  DOCKER_CERT_PATH          Location of your docker-machine authentication keys
+
+Config:
+  You can set the default values with a JSON file named '.singpathrc' in your
+  working directory.
+
+  Example:
+
+    {
+      "endpoint": "https://my-db.firebaseio.com/singpath/queues/default",
+      "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+
+`;
+
+
+if (require.main === module) {
+  main();
+}
+
+function main() {
+  fileSettings('./.singpathrc', DEFAULT_SETTINGS).then(
+    settings => envSettings(settings)
+  ).then(
+    settings => parseArgs(settings)
+  ).then(args => {
+    let level = verifier.logger.levels.INFO;
+
+    if (args.debug) {
+      level = verifier.logger.levels.DEBUG;
+    } else if (args.quiet) {
+      level = verifier.logger.levels.ERROR;
+    }
+
+    return args.func(args, verifier.logger(process.stderr, level));
+  }).catch( err => {
+    console.error('Unexpected error: %s\n\n%s', err, err.stack);
+    process.exit(1);
+  });
+}
+
+const cmd = {
+
+  run(args, logger) {
+    logger.info('Using queue at %s', args.endpoint);
+
+    const generator = new FirebaseTokenGenerator(args.secret);
+    const auth = verifier.auth(generator, args.debug);
+
+    return singpathQueue(args, logger).then(q => {
+      logger.info('Starting watching queue...');
+
+      q.on('watchStopped', err => {
+        if (err) {
+          logger.debug('Restarting watching queue after error: %s', err.toString());
+          watch(q, auth, logger);
+        }
+
+        logger.debug('Cleaning up before closing.');
+        q.cleanup().then(
+          () => process.exit(0),
+          () => process.exit(129)
+        );
+      });
+
+      return watch(q, auth, logger);
+    });
+  },
+
+  push(args, logger) {
+
+    logger.info('parsing yaml encoded solutions');
+    const solutions = loadSolutions(args.payload, {logger});
+
+    if (solutions.length < 0) {
+      logger.error('no solution to push');
+      process.exit(131);
+    }
+
+    const generator = new FirebaseTokenGenerator(args.secret);
+    const auth = verifier.auth(generator, args.debug);
+    const authToken = auth.user();
+
+    return singpathQueue(args, logger).then(q => {
+      return q.auth(authToken).then(() => {
+        return pushSolutions(q, solutions, logger);
+      }).then(
+        failures => process.exit(failures)
+      );
+    });
+  },
+
+  settings(args) {
+    delete args.func;
+
+    return Promise.resolve(args['prompt_secret']).then(doPrompt => {
+      delete args['prompt_secret'];
+
+      if (!doPrompt || !process.stdout.isTTY) {
+        return args.secret;
+      }
+
+      return promptSecret(args.endpoint);
+    }).then(
+      secret => args.secret = secret
+    ).then(
+      () => console.log(JSON.stringify(args, null, 4))
+    );
+  },
+
+  build(args, logger) {
+    return Object.keys(verifier.images).reduce((chain, language) => {
+      const image = verifier.images[language];
+
+      return chain.then(() => {
+        logger.info('building image "%s"', image.name);
+        return buildImage(image, logger);
+      });
+    }, Promise.resolve());
+  },
+
+  test(args, logger) {
+    const solutions = loadSolutions(args.payload, {logger});
+
+    if (solutions.length < 0) {
+      logger.error('no solution to test.');
+      process.exit(132);
+    }
+
+    verifier.dockerClient(args).then(client => {
+      return testSolutions(client, solutions, logger);
+    }).then(
+      () => logger.info('Tests run successfully.')
+    ).catch(err => {
+      logger.error('%s', err.toString());
+      process.exit(133);
+    });
+  }
+};
+
+function fileSettings(settingPath, defaults) {
+  defaults = defaults || {};
+
+  return fs.readFile(settingPath).then(
+    config => JSON.parse(config)
+  ).catch(
+    () => {
+      return {};
+    }
+  ).then(
+    config => Object.assign({}, defaults, config)
+  );
+}
+
+function envSettings(defaults) {
+  const settings = Object.assign({}, defaults);
+
+  if (process.env.SINGPATH_FIREBASE_SECRET) {
+    settings.secret = process.env.SINGPATH_FIREBASE_SECRET;
+  }
+
+  if (process.env.SINGPATH_FIREBASE_QUEUE) {
+    settings.endpoint = process.env.SINGPATH_FIREBASE_QUEUE;
+  }
+
+  if (process.env.DOCKER_HOST) {
+    settings.host = process.env.DOCKER_HOST;
+  }
+
+  if (process.env.DOCKER_TLS_VERIFY === '1') {
+    settings.tls = true;
+  }
+
+  if (process.env.DOCKER_CERT_PATH)   {
+    settings.tlscacert = path.join(process.env.DOCKER_CERT_PATH, 'ca.pem');
+    settings.tlscert = path.join(process.env.DOCKER_CERT_PATH, 'cert.pem');
+    settings.tlskey = path.join(process.env.DOCKER_CERT_PATH, 'key.pem');
+  }
+
+  return settings;
+}
+
+function parseArgs(defaults, args) {
+  const parser = new argparse.ArgumentParser({
+    version: packageJson.version,
+    addHelp: true,
+    description: 'Push message',
+    formatterClass: argparse.RawTextHelpFormatter,
+    epilog: EPILOG
+  });
+
+  parser.setDefaults(defaults);
+
+  parser.addArgument(['-d', '--debug' ], {
+    action: 'storeTrue',
+    help: 'print debug messages'
+  });
+
+  parser.addArgument(['-s', '--silent' ], {
+    action: 'storeTrue',
+    help: 'print only error messages'
+  });
+
+  parser.addArgument(['-H', '--host'], {
+    help: 'Docker daemon socket to connect to\n(default: %(defaultValue)s)'
+  });
+
+  parser.addArgument(['--tls'], {
+    help: 'Use TLS with the Docker daemon\n(default: %(defaultValue)s)',
+    action: 'storeTrue'
+  });
+
+  parser.addArgument(['--tlscacert'], {
+    help: 'Trust certs signed only by this CA\n(default: %(defaultValue)s)'
+  });
+
+  parser.addArgument(['--tlscert'], {
+    help: 'Path to TLS certificate file\n(default: %(defaultValue)s)'
+  });
+
+  parser.addArgument(['--tlskey'], {
+    help: 'Path to TLS key file\n(default: %(defaultValue)s)'
+  });
+
+  const subparsers = parser.addSubparsers();
+  const runParser = subparsers.addParser('run', {
+    addHelp: true,
+    description: 'Start the verifier daemon',
+    formatterClass: argparse.RawTextHelpFormatter,
+    epilog: EPILOG
+  });
+  const pushParser = subparsers.addParser('push', {
+    addHelp: true,
+    description: 'Push a task to the Firebase queue',
+    formatterClass: argparse.RawTextHelpFormatter,
+    epilog: EPILOG
+  });
+  const settingsParser = subparsers.addParser('settings', {
+    addHelp: true,
+    description: 'Print settings',
+    formatterClass: argparse.RawTextHelpFormatter,
+    epilog: EPILOG
+  });
+  const buildParser = subparsers.addParser('build-verifiers', {
+    addHelp: true,
+    description: 'Build verifier images',
+    formatterClass: argparse.RawTextHelpFormatter,
+    epilog: EPILOG
+  });
+  const testParser = subparsers.addParser('test', {
+    addHelp: true,
+    description: (
+      'Test verifier images against a yaml encoded array of solution'
+    ),
+    formatterClass: argparse.RawTextHelpFormatter,
+    epilog: EPILOG
+  });
+
+  [runParser, pushParser, settingsParser].forEach(parser => {
+    parser.addArgument(['-e', '--endpoint' ], {
+      help: 'Path to the firebase queue\n(default: %(defaultValue)s)'
+    });
+
+    parser.addArgument(['-p', '--prompt-secret'], {
+      help: 'Prompt for the Firebase secret',
+      action: 'storeTrue'
+    });
+
+    parser.setDefaults({
+      endpoint: defaults.endpoint,
+      'prompt_secret': defaults['prompt_secret']
+    });
+  });
+
+  runParser.setDefaults({func: requireSecret(cmd.run)});
+
+  pushParser.setDefaults({func: requireSecret(cmd.push)});
+  pushParser.addArgument(['payload'], {
+    help: 'JSON or YAML payload to push; \nmust include `language`, `tests` and `solution`'
+  });
+
+  settingsParser.setDefaults({func: cmd.settings});
+
+  buildParser.setDefaults({func: cmd.build});
+
+  testParser.addArgument(['payload'], {
+    help: (
+      'YAML encoded payload; \n' +
+      'each solution must include `language`, `tests`, `solution` and `expected`; \n' +
+      '`expected` must match the result of the verifier.'
+    )
+  });
+  testParser.setDefaults({func: cmd.test});
+
+  return parser.parseArgs(args);
+}
+
+function singpathQueue(args, logger) {
+  const fbClient = new Firebase(args.endpoint);
+
+  return verifier.dockerClient(args).then(
+    client => verifier.singpathQueue(fbClient, client, {logger})
+  );
+}
+
+function requireSecret(func) {
+  return (args, logger) => {
+    return Promise.resolve(args['prompt_secret']).then(doPrompt => {
+      if (!doPrompt || !process.stdout.isTTY) {
+        return args.secret;
+      }
+
+      return promptSecret(args.endpoint);
+    }).then(secret => {
+      if (!secret) {
+        logger.error(ERROR_NO_SECRET);
+        process.exit(130);
+      }
+
+      args.secret = secret;
+      return func(args, logger);
+    });
+  };
+}
+
+function promptSecret(endpoint) {
+
+  console.info(HINT_AUTH_SECRET, firebaseId(endpoint));
+
+  return new Promise((resolve, reject) => {
+    const schema = {
+      properties: {
+        secret: {
+          description: 'Firebase auth secret',
+          message: ERROR_NO_SECRET,
+          hidden: true,
+          required: true
+        }
+      }
+    };
+
+    prompt.start({colors: false});
+    prompt.get(schema, (err, results) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(results.secret);
+      }
+    });
+  });
+}
+
+function firebaseId(endpoint) {
+  if (!endpoint) {
+    throw new Error(ERROR_NO_ENDPOINT);
+  }
+
+  let parsedUrl;
+
+  try {
+    parsedUrl = url.parse(endpoint);
+  } catch (e) {
+    throw new Error(ERROR_INVALID_ENDOPOINT);
+  }
+
+  return parsedUrl.hostname.split('.', 1).pop();
+}
+
+function watch(q, auth, logger) {
+  logger.info('Generating auth token...');
+  const token = auth.worker(q.queueName);
+
+  logger.info('Authenticating client...');
+  return q.auth(token).then(
+    () => q.reset()
+  ).then(
+    () => q.watch()
+  ).catch(err => {
+    logger.error(err);
+    process.exit(130);
+  });
+}
+
+function loadSolutions(yamlString, options) {
+  let docs = [];
+  const logger = options.logger || console;
+
+  logger.info('Parsing solutions to push...');
+  logger.debug(yamlString);
+  yaml.safeLoadAll(yamlString, doc => {
+    const language = doc.language;
+    const tests = doc.tests;
+    const solution = doc.solution;
+    const expected = doc.expected;
+
+    if (!language || !tests || !solution) {
+      logger.error(
+        'The verifier requires a language, some tests and a solution. Got: %s',
+        doc
+      );
+      return;
+    }
+
+    docs.push({language, tests, solution, expected});
+  });
+
+  return docs;
+}
+
+function pushSolutions(q, solutions, logger) {
+  let operations = solutions.map(payload => {
+    logger.info('Pushing solution... ');
+    delete payload.expected;
+
+    return q.pushToQueue(payload).then(
+      ref => logger.info('Solution pushed at %s', ref.toString())
+    );
+  });
+
+  let failure = 0;
+
+  // recover any rejected push operation and count the number of failure
+  return Promise.all(
+    operations.map(
+      op => op.catch(err => console.error('Push failed: %s', err))
+    )
+  ).then(
+    () => failure
+  );
+}
+
+function testSolutions(dockerClient, solutions, logger) {
+  return solutions.reduce((chain, solution) => {
+    const language = solution.language;
+    const tests = solution.tests;
+    const sol = solution.solution;
+    const expected = solution.expected;
+
+    return chain.then(() => {
+      const s = {language, tests, solution: sol};
+
+      logger.info('Running "%s"...', JSON.stringify(s, null, '  '));
+
+      return verifier.verify(dockerClient, s, {logger});
+    }).then(
+      result => expect(result).to.eql(expected)
+    );
+  }, Promise.resolve());
+}
+
+function buildImage(image, logger) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      stdio: 'inherit',
+      cwd: path.resolve(__dirname, '../')
+    };
+    const docker = spawn(
+      'docker',
+      ['build', '-t', `${image.name}:latest`, image.path],
+      options
+    );
+
+    logger.debug(
+      'Building "%s" at "%s" from "%s"', image.name, image.path, options.cwd
+    );
+
+    docker.on('error', reject);
+    docker.on('close', function (code) {
+      if (code !== 0) {
+        reject(code);
+      } else {
+        resolve();
+      }
+    });
+  });
+}

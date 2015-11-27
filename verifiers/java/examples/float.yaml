@@ -1,0 +1,10 @@
+---
+tests: |
+  SingPath sp = new SingPath();
+  assertEquals(2.0, sp.add());
+solution: |
+  public class SingPath {
+    public Double add() {
+      return 2.0;
+    }
+  }

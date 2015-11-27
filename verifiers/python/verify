@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+#
+# CLI to run some python code against doc tests.
+#
+import argparse
+import json
+import yaml
+import logging
+import os
+import subprocess
+import sys
+
+
+TIMEOUT = 5
+RUNNER_SCRIPT = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    'runner'
+)
+UNEXPECTED_ERROR = 'Unexpected error.'
+TIMEOUT_ERROR = 'The verification timed out.'
+
+
+# Comand line parser
+parser = argparse.ArgumentParser(
+    description=(
+        "Runs some python code and test it with some doctest tests."
+    )
+)
+
+parser.add_argument("-d", "--debug", action='store_true')
+parser.add_argument("-q", "--quiet", action='store_true')
+parser.add_argument("-v", "--verbose", action='store_true')
+parser.add_argument('payload', help='Payload, json or yaml encoded, to run')
+
+
+def errors(msg):
+    json.dump({
+        'solved': False,
+        'errors': msg
+    }, fp=sys.stdout)
+
+
+def spawn(solution, tests=None):
+    if tests is None:
+        args = [sys.executable, RUNNER_SCRIPT, solution]
+    else:
+        args = [sys.executable, RUNNER_SCRIPT, solution, tests]
+
+    proc = subprocess.Popen(
+        args,
+        stdout=subprocess.PIPE,
+        universal_newlines=True,
+    )
+
+    try:
+        out, _ = proc.communicate(timeout=TIMEOUT)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        logging.error('Code runner timed out')
+        errors(TIMEOUT_ERROR)
+        return
+
+    if proc.returncode != 0:
+        logging.error('Code runner exit with code %d', proc.returncode)
+        errors(UNEXPECTED_ERROR)
+        return
+
+    print(out)
+
+
+def parse_yaml(payload):
+    req = yaml.safe_load(payload)
+    return req['solution'], req['tests']
+
+
+def parse_json(payload):
+    req = json.loads(payload)
+    return req['solution'], req['tests']
+
+
+def main(args):
+    try:
+        if args.payload.strip().startswith('---'):
+            solution, tests = parse_yaml(args.payload)
+        else:
+            solution, tests = parse_json(args.payload)
+    except Exception:
+        logging.error(
+            'Could not find the "tests" and "solution" in the payload'
+        )
+        exit(128)
+    spawn(solution, tests)
+
+
+if __name__ == "__main__":
+    args = parser.parse_args()
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    elif args.quiet:
+        logging.basicConfig(level=logging.ERROR)
+    else:
+        logging.basicConfig(level=logging.INFO)
+    main(args)

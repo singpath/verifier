@@ -1,0 +1,4 @@
+{
+    "solution": "foo=1",
+    "tests": "test(\"test1\", () => assert.ok(foo)); test(\"test2\", () => assert.equal(1, foo))"
+}

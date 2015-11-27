@@ -1,0 +1,23 @@
+sudo: required
+language: python
+python:
+  - "2.7"
+
+services:
+  - docker
+
+before_install:
+  - 'sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D'
+  - 'echo "deb https://apt.dockerproject.org/repo ubuntu-trusty main" | sudo tee /etc/apt/sources.list.d/docker.list'
+  - 'sudo apt-get update'
+  - 'sudo apt-get purge -y lxc-docker docker-engine'
+  - 'sudo apt-get install -y docker-engine'
+  - 'docker --version'
+  - 'sudo docker build -t singpath/verifier2:latest .'
+  - 'sudo docker build -t singpath/verifier2-python:latest ./verifiers/python'
+  - 'sudo docker build -t singpath/verifier2-java:latest ./verifiers/java'
+  - 'sudo docker build -t singpath/verifier2-javascript:latest ./verifiers/javascript'
+
+script:
+  - 'sudo docker run -ti --rm -e SKIP_BUILD=1 singpath/verifier2:latest npm test'
+  - 'sudo docker run -ti --rm -e SKIP_BUILD=1 -v /var/run/docker.sock:/var/run/docker.sock --group-add `cat /etc/group | grep "^docker" | cut -d: -f3` singpath/verifier2:latest verifier test "$(cat ./examples/tests.yaml)"'

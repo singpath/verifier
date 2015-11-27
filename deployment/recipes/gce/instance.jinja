@@ -1,0 +1,68 @@
+resources:
+- name: {{ env["name"] }}
+  type: compute.v1.instance
+  properties:
+
+    zone: {{ properties["zone"] }}
+    machineType: https://www.googleapis.com/compute/v1/projects/{{ env["project"] }}/zones/{{ properties["zone"] }}/machineTypes/{{ properties["machineType"] }}
+  
+    disks:
+    - deviceName: boot
+      type: PERSISTENT
+      boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/ubuntu-1404-trusty-v20151113
+  
+    networkInterfaces:
+    - network: https://www.googleapis.com/compute/v1/projects/{{ env["project"] }}/global/networks/default
+      # Access Config required to give the instance a public IP address
+      accessConfigs:
+      - name: External NAT
+        type: ONE_TO_ONE_NAT
+  
+    metadata:
+     items:
+     -  key: singpath-endpoint
+        value: {{ properties["singpathEndpoint"] }}
+     -  key: singpath-secret
+        value: {{ properties["singpathSecret"] }}
+     -  key: startup-script
+        value: |
+          #!/bin/bash
+
+          function getMetaData() {
+            curl http://metadata.google.internal/computeMetadata/v1/instance/attributes/$1 -H "Metadata-Flavor: Google"
+          }
+
+          export DEBIAN_FRONTEND=noninteractive
+          export SINGPATH_CONTAINER=verifier
+
+          sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+          echo "deb https://apt.dockerproject.org/repo ubuntu-trusty main" | sudo tee /etc/apt/sources.list.d/docker.list
+          sudo apt-get update
+          sudo apt-get purge -y lxc-docker
+          sudo apt-get install -y linux-image-extra-$(uname -r)
+          sudo apt-get install -y docker-engine
+          sudo service docker start
+          docker -v
+          sudo docker ps -a
+          sudo docker rm -f "$SINGPATH_CONTAINER"
+
+          sudo mkdir -p /etc/singpath
+          export DOCKER_GROUP_ID=`cat /etc/group | grep "^docker" | cut -d: -f3`
+          export SINGPATH_FIREBASE_SECRET="$(getMetaData singpath-secret)"
+          export SINGPATH_FIREBASE_ENDPOINT="$(getMeta singpath-endpoint)"
+          env | grep ^SINGPATH | sudo dd of=/etc/singpath/env.file
+          echo "SKIP_BUILD=1" | sudo tee -a /etc/singpath/env.file
+
+          sudo docker pull singpath/verifier2:latest
+          sudo docker pull singpath/verifier2-python:latest
+          sudo docker pull singpath/verifier2-java:latest
+          sudo docker pull singpath/verifier2-javascript:latest
+          sudo docker run -d \
+            --name "$SINGPATH_CONTAINER" --restart=always \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            --group-add $DOCKER_GROUP_ID \
+            --env-file /etc/singpath/env.file \
+            singpath/verifier2:latest

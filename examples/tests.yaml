@@ -1,0 +1,85 @@
+---
+language: javascript
+tests: |
+  test('foo === 1', () => assert.equal(1, foo));
+solution: |
+  foo = 1
+expected:
+  solved: true
+  results:
+  - test: 'foo === 1'
+    correct: true
+---
+language: javascript
+tests: |
+  test('foo === 1', () => assert.equal(1, foo));
+solution: |
+  foo = 0
+expected:
+  solved: false
+  results:
+  - test: 'foo === 1'
+    correct: false
+    error: 'AssertionError: 1 == 0'
+---
+language: python
+tests: |
+  >>> foo
+  1
+solution: |
+  foo = 1
+expected:
+  solved: true
+  printed: ""
+  results:
+  - call: foo
+    received: 1
+    expected: 1
+    correct: true
+---
+language: python
+tests: |
+  >>> foo
+  1
+solution: |
+  foo = 0
+expected:
+  solved: false
+  printed: ""
+  results:
+  - call: foo
+    received: 0
+    expected: 1
+    correct: false
+---
+language: java
+tests: |
+  SingPath sp = new SingPath();
+  assertEquals(4.0, sp.add(2.0, 2.0));
+solution: |
+  public class SingPath {
+
+    public Double add(Double x, Double y) {
+      return x + y + 1;
+    }
+  }
+expected:
+  solved: false
+  runTime: 1
+  results:
+  - correct: false
+    call: 'testSolution(SingPathTest): expected:<4.0> but was:<5.0>'
+---
+language: java
+tests: |
+  SingPath sp = new SingPath();
+  assertEquals(2.0, sp.echo(2.0));
+solution: |
+  public class SingPath {
+    public Double echo(Double x) {
+      return x;
+    }
+  }
+expected:
+  solved: true
+  runTime: 1

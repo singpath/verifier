@@ -1,0 +1,33 @@
+{
+  "name": "verifier",
+  "version": "2.0.0",
+  "description": "Verifier for SingPath.com",
+  "main": "src/index.js",
+  "bin": {
+    "push-solution": "./bin/push-solution",
+    "setup": "./bin/setup",
+    "verifier": "./bin/verifier"
+  },
+  "scripts": {
+    "test": "eslint src/ tests/ && mocha tests",
+    "lint": "eslint src/ tests/"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "argparse": "^1.0.3",
+    "dockerode": "^2.2.3",
+    "firebase": "^2.3.1",
+    "firebase-token-generator": "^2.0.0",
+    "js-yaml": "^3.4.3",
+    "lodash.debounce": "^3.1.1",
+    "lodash.once": "^3.0.1",
+    "node-uuid": "^1.4.3",
+    "prompt": "^0.2.14"
+  },
+  "devDependencies": {
+    "eslint": "^1.8.0",
+    "expect.js": "^0.3.1",
+    "mocha": "^2.3.3"
+  }
+}

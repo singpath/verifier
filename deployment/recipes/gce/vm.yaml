@@ -1,0 +1,11 @@
+imports:
+- path: instance.jinja
+
+resources:
+- type: instance.jinja
+  name: vm-singpath-verifier
+  properties:
+    machineType: f1-micro
+    zone: us-central1-a
+    singpathEndpoint: https://singpath-play.firebaseio.com/singpath/queues/default
+    singpathSecret: xxx-some-secret-xxx

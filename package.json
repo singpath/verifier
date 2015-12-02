@@ -1,5 +1,5 @@
 {
-  "name": "verifier",
+  "name": "singpath-verifier",
   "version": "2.1.0",
   "description": "Verifier for SingPath.com",
   "main": "src/index.js",

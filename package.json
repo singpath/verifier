@@ -1,6 +1,6 @@
 {
   "name": "singpath-verifier",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Verifier for SingPath.com",
   "main": "src/index.js",
   "bin": {
@@ -17,6 +17,7 @@
   "license": "ISC",
   "dependencies": {
     "argparse": "^1.0.3",
+    "deep-diff": "^0.3.3",
     "dockerode": "^2.2.3",
     "firebase": "^2.3.1",
     "firebase-token-generator": "^2.0.0",

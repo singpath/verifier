@@ -3,7 +3,7 @@
 'use strict';
 
 const argparse = require('argparse');
-const expect = require('expect.js');
+const deepDiff = require('deep-diff');
 const Firebase = require('firebase');
 const FirebaseTokenGenerator = require('firebase-token-generator');
 const path = require('path');
@@ -481,9 +481,23 @@ function testSolutions(dockerClient, solutions, logger) {
 
       return verifier.verify(dockerClient, s, {logger});
     }).then(
-      result => expect(result).to.eql(expected)
+      result => assertEqual(result, expected)
     );
   }, Promise.resolve());
+}
+
+function assertEqual(actual, expected) {
+  const diff = deepDiff(actual, expected) || [];
+  const errors = diff.filter(
+    diff => diff.kind !== 'E' || diff.rhs !== '<ANY>'
+  ).length;
+  const toJson = value => JSON.stringify(value, null, '  ');
+
+  if (errors > 0) {
+    throw new Error(`Was expecting "${toJson(expected)}"; got "${toJson(actual)}"`);
+  }
+
+  return actual;
 }
 
 function buildImage(image, logger) {

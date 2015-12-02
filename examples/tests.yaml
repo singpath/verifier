@@ -30,11 +30,11 @@ solution: |
   foo = 1
 expected:
   solved: true
-  printed: ""
+  printed: ''
   results:
   - call: foo
-    received: 1
-    expected: 1
+    received: '1'
+    expected: '1'
     correct: true
 ---
 language: python
@@ -45,11 +45,11 @@ solution: |
   foo = 0
 expected:
   solved: false
-  printed: ""
+  printed: ''
   results:
   - call: foo
-    received: 0
-    expected: 1
+    received: '0'
+    expected: '1'
     correct: false
 ---
 language: java
@@ -65,7 +65,9 @@ solution: |
   }
 expected:
   solved: false
-  runTime: 1
+  meta:
+    runTime: "<ANY>"
+    runCount: 1
   results:
   - correct: false
     call: 'testSolution(SingPathTest): expected:<4.0> but was:<5.0>'
@@ -82,4 +84,6 @@ solution: |
   }
 expected:
   solved: true
-  runTime: 1
+  meta:
+    runTime: "<ANY>"
+    runCount: 1

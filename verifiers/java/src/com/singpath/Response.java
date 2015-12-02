@@ -15,9 +15,8 @@ public class Response {
     private String errors;
     private Boolean solved;
     private JSONArray results;
+    private JSONObject meta;
     private String printed;
-    private int runCount = -1;
-    private long runTime = -1;
 
     public Response() {
         this(true);
@@ -30,8 +29,8 @@ public class Response {
             this.addResult(f.toString());
         }
 
-        this.runCount = result.getRunCount();
-        this.runTime = result.getRunTime();
+        this.addMeta("runCount", result.getRunCount());
+        this.addMeta("runTime", result.getRunTime());
     }
 
     public Response(boolean solved) {
@@ -57,6 +56,14 @@ public class Response {
         this.results.add(result);
     }
 
+    public void addMeta(String label, Object value) {
+        if (this.meta == null) {
+            this.meta = new JSONObject();
+        }
+
+        meta.put(label, value);
+    }
+
     public void setSolved(Boolean solved) {
         this.solved = solved;
     }
@@ -80,13 +87,9 @@ public class Response {
             json.put("results", this.results);
         }
 
-        if (this.runTime != -1) {
-            json.put("runTime", this.runTime);
-        }
-
-        if (this.runCount != -1) {
-            json.put("runTime", this.runCount);
-        }
+        if (this.meta != null && this.meta.size() > 0) {
+            json.put("meta", this.meta);
+        }        
 
         if (this.printed != null && this.printed.length() > 0) {
             json.put("printed", this.printed);

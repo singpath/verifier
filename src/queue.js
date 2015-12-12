@@ -62,7 +62,7 @@ module.exports = class Queue extends events.EventEmitter {
     return (
       this.isLoggedIn() &&
       this.authData.auth &&
-      this.authData.auth.isWorker() &&
+      this.authData.auth.isWorker &&
       this.authData.auth.queue === this.queueName
     );
   }

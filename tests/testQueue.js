@@ -57,6 +57,34 @@ describe('queue', () => {
     expect(queue.tasksRef).to.be(tasksRef);
   });
 
+  describe('isWorker', () => {
+
+    beforeEach(() => {
+      sinon.stub(queue, 'isLoggedIn').returns(true);
+      queue.authData = {auth: {isWorker: true, queue: 'default'}};
+    });
+
+    it('should return false if the user is not logged in', () => {
+      queue.isLoggedIn.returns(false);
+      expect(queue.isWorker()).to.be(false);
+    });
+
+    it('should return false if the user is not a worker', () => {
+      queue.authData.auth.isWorker = false;
+      expect(queue.isWorker()).to.be(false);
+    });
+
+    it('should return false if the user is a worker for an other queue', () => {
+      queue.authData.auth.queue = 'my-queue';
+      expect(queue.isWorker()).to.be(false);
+    });
+
+    it('should return true if the user is a worker for the correct queue', () => {
+      expect(queue.isWorker()).to.be(true);
+    });
+
+  });
+
   describe('solutionRelativePath', () => {
 
     ['', '/'].map(start => {

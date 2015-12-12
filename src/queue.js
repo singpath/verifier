@@ -35,7 +35,8 @@ module.exports = class Queue extends events.EventEmitter {
     };
 
     this.queueName = this.ref.key();
-    this.taskRef = this.ref.child('tasks');
+    this.singpathRef = this.ref.root().child('singpath');
+    this.tasksRef = this.ref.child('tasks');
     this.workerRef = this.ref.child('workers');
 
     this.tasksToRun = new FIFO();
@@ -53,15 +54,15 @@ module.exports = class Queue extends events.EventEmitter {
     });
   }
 
-  get isLoggedIn() {
+  isLoggedIn() {
     return this.authData && this.authData.uid;
   }
 
-  get isWorker() {
+  isWorker() {
     return (
-      this.isLoggedIn &&
+      this.isLoggedIn() &&
       this.authData.auth &&
-      this.authData.auth.isWorker &&
+      this.authData.auth.isWorker() &&
       this.authData.auth.queue === this.queueName
     );
   }
@@ -98,11 +99,11 @@ module.exports = class Queue extends events.EventEmitter {
    * @return {Promise}         Promise resolving to the new task reference.
    */
   pushToQueue(payload) {
-    if (!this.isLoggedIn) {
+    if (!this.isLoggedIn()) {
       return Promise.reject(new Error('No user logged in.'));
     }
 
-    return promisedPush(this.taskRef, {
+    return promisedPush(this.tasksRef, {
       started: false,
       completed: false,
       consumed: false,
@@ -119,7 +120,7 @@ module.exports = class Queue extends events.EventEmitter {
    *                   deregister it.
    */
   registerWorker() {
-    if (!this.isWorker) {
+    if (!this.isWorker()) {
       return Promise.reject(new Error('The user is not logged in as a worker for this queue'));
     }
 
@@ -146,7 +147,7 @@ module.exports = class Queue extends events.EventEmitter {
       return () => {
         stopTimer();
 
-        if (!this.isWorker) {
+        if (!this.isWorker()) {
           return Promise.reject(new Error('The user is not logged in as a worker for this queue'));
         }
 
@@ -161,7 +162,7 @@ module.exports = class Queue extends events.EventEmitter {
    * @return {Promise} Resolve when the presence is updated
    */
   updatePresence() {
-    if (!this.isWorker) {
+    if (!this.isWorker()) {
       return Promise.reject(new Error('The user is not logged in as a worker for this queue'));
     }
 
@@ -227,7 +228,7 @@ module.exports = class Queue extends events.EventEmitter {
   }
 
   monitorAddedTask(failHandler) {
-    const query = this.taskRef.orderByChild('started').equalTo(false);
+    const query = this.tasksRef.orderByChild('started').equalTo(false);
     const handler = query.on('child_added', snapshot => {
       this.sheduleTask(snapshot.key(), snapshot.val());
     }, failHandler);
@@ -236,7 +237,7 @@ module.exports = class Queue extends events.EventEmitter {
   }
 
   monitorUpdatedTask(failHandler) {
-    const query = this.taskRef.orderByChild('started').equalTo(false);
+    const query = this.tasksRef.orderByChild('started').equalTo(false);
     const handler = query.on('child_changed', snapshot => {
       const val = snapshot.val();
 
@@ -319,11 +320,11 @@ module.exports = class Queue extends events.EventEmitter {
    * @return {Promise}     Resolve when the
    */
   claimTask(task) {
-    if (!this.isWorker) {
+    if (!this.isWorker()) {
       return Promise.reject(new Error('The user is not logged in as a worker for this queue'));
     }
 
-    return promisedUpdate(this.taskRef.child(task.key), {
+    return promisedUpdate(this.tasksRef.child(task.key), {
       worker: this.authData.uid,
       started: true,
       startedAt: Firebase.ServerValue.TIMESTAMP
@@ -342,11 +343,11 @@ module.exports = class Queue extends events.EventEmitter {
    * @return {Promise}     Resolve when claim is removed.
    */
   removeTaskClaim(task) {
-    if (!this.isWorker) {
+    if (!this.isWorker()) {
       return Promise.reject(new Error('The user is not logged in as a worker for this queue'));
     }
 
-    return promisedUpdate(this.taskRef.child(task.key), {
+    return promisedUpdate(this.tasksRef.child(task.key), {
       worker: null,
       started: false,
       startedAt: null
@@ -366,14 +367,21 @@ module.exports = class Queue extends events.EventEmitter {
    * @return {Promise}        Resolve when result is saved.
    */
   saveTaskResults(task, results) {
-    if (!this.isWorker) {
+    if (!this.isWorker()) {
       return Promise.reject(new Error('The user is not logged in as a worker for this queue'));
     }
 
     let promiseReturn;
 
     if (task && task.data && task.data.solutionRef) {
-      promiseReturn = this.savePushTaskResults(task, results);
+      promiseReturn = this.savePushTaskResults(task, results).catch(err => {
+        this.logger.error(
+          'Failed to save task (%s): %s.\n Retrying to save it as unconsumed',
+          task.key,
+          err
+        );
+        return this.savePullTaskResults(task, results);
+      });
     } else {
       promiseReturn = this.savePullTaskResults(task, results);
     }
@@ -381,17 +389,50 @@ module.exports = class Queue extends events.EventEmitter {
     return promiseReturn.then(
       () => this.logger.info('Task ("%s") results saved.', task.key)
     ).catch(err => {
-      this.logger.error('Failed to save task results("%s"): %s', task.key, err.toString());
+      this.logger.error('Failed to save task results ("%s"): %s', task.key, err);
       return Promise.reject(err);
     });
   }
 
-  solutionRefMaker(task) {
-    return this.ref.parent().parent().parent().child(task.solutionRef);
+  /**
+   * Return the a path to the solution relative to /singpath.
+   *
+   * @param  {string} taskPath
+   * @return {string}
+   */
+  solutionRelativePath(taskPath) {
+    const path = taskPath.split('/');
+
+    if (path[0] === 'singpath') {
+      return path.slice(1).join('/');
+    }
+
+    if (path[0] === '' && path[1] === 'singpath') {
+      return path.slice(2).join('/');
+    }
+
+    return;
   }
 
+  /**
+   * Return a task path relative to /singpath.
+   *
+   * @param  {string} taskId
+   * @return {string}
+   */
+  taskRelativePath(taskId) {
+    return this.tasksRef.path.slice(1).concat([taskId]).join('/');
+  }
+
+  /**
+   * Save the task result and update the solution meta.
+   *
+   * @param  {Object} task    task key and data.
+   * @param  {Object} results solution results
+   * @return {Promise}
+   */
   savePushTaskResults(task, results) {
-    if (!this.isWorker) {
+    if (!this.isWorker()) {
       return Promise.reject(new Error('The user is not logged in as a worker for this queue'));
     }
 
@@ -399,25 +440,40 @@ module.exports = class Queue extends events.EventEmitter {
       return Promise.reject(new Error('The task is not a Push task'));
     }
 
-    return promisedUpdate(this.solutionRefMaker(task.data), {
-      ['results/' + task.key]: results,
-      'meta/verified': true,
-      'meta/solved': results.solved
-    }).then(() => {
-      return promisedUpdate(this.taskRef.child(task.key), {
-        completedAt: Firebase.ServerValue.TIMESTAMP,
-        completed: true,
-        consumed: true
-      });
+    const solutionPath = this.solutionRelativePath(task.data.solutionRef);
+    const taskPath = this.taskRelativePath(task.key);
+
+    if (!solutionPath) {
+      return Promise.reject(new Error(
+        `Invalid relative path to solution (from ${task.data.solutionRef})`
+      ));
+    }
+
+    return promisedUpdate(this.singpathRef, {
+      [`${solutionPath}/results/${task.key}`]: results,
+      [`${solutionPath}/meta/verified`]: true,
+      [`${solutionPath}/meta/solved`]: results.solved,
+      [`${taskPath}/completedAt`]: Firebase.ServerValue.TIMESTAMP,
+      [`${taskPath}/completed`]:true,
+      [`${taskPath}/consumed`]:true
     });
   }
 
+  /**
+   * Save the result with task.
+   *
+   * Leaves the task as unconsumed.
+   *
+   * @param  {Object} task    Task key and data
+   * @param  {Object} results Task results
+   * @return {[Promise}
+   */
   savePullTaskResults(task, results) {
-    if (!this.isWorker) {
+    if (!this.isWorker()) {
       return Promise.reject(new Error('The user is not logged in as a worker for this queue'));
     }
 
-    return promisedUpdate(this.taskRef.child(task.key), {
+    return promisedUpdate(this.tasksRef.child(task.key), {
       results: results,
       completedAt: Firebase.ServerValue.TIMESTAMP,
       completed: true
@@ -432,7 +488,7 @@ module.exports = class Queue extends events.EventEmitter {
    * @return {Promise}.
    */
   reset() {
-    if (!this.isWorker) {
+    if (!this.isWorker()) {
       return Promise.reject(new Error('The user is not logged in as a worker for this queue'));
     }
 
@@ -497,7 +553,7 @@ module.exports = class Queue extends events.EventEmitter {
   removeTaskClaims(claimedBefore) {
     this.logger.debug('Removing claims on task older than %s...', new Date(claimedBefore));
 
-    const query = this.taskRef.orderByChild('completed').equalTo(false);
+    const query = this.tasksRef.orderByChild('completed').equalTo(false);
     const handler = query.on('child_added', snapshot => {
       const val = snapshot.val();
 

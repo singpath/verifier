@@ -52,7 +52,7 @@ resources:
           sudo mkdir -p /etc/singpath
           export DOCKER_GROUP_ID=`cat /etc/group | grep "^docker" | cut -d: -f3`
           export SINGPATH_FIREBASE_SECRET="$(getMetaData singpath-secret)"
-          export SINGPATH_FIREBASE_ENDPOINT="$(getMeta singpath-endpoint)"
+          export SINGPATH_FIREBASE_QUEUE="$(getMeta singpath-endpoint)"
           env | grep ^SINGPATH | sudo dd of=/etc/singpath/env.file
           echo "SKIP_BUILD=1" | sudo tee -a /etc/singpath/env.file
 

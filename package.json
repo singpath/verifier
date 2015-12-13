@@ -1,6 +1,6 @@
 {
   "name": "singpath-verifier",
-  "version": "2.1.0",
+  "version": "2.1.2",
   "description": "Verifier for SingPath.com",
   "main": "src/index.js",
   "bin": {

@@ -152,7 +152,7 @@ const cmd = {
 
       return chain.then(() => {
         logger.info('building image "%s"', image.name);
-        return buildImage(image, logger);
+        return buildImage(image, args.verifiertag, logger);
       });
     }, Promise.resolve());
   },
@@ -166,7 +166,7 @@ const cmd = {
     }
 
     verifier.dockerClient(args).then(client => {
-      return testSolutions(client, solutions, logger);
+      return testSolutions(client, solutions, args.verifiertag, logger);
     }).then(
       () => logger.info('Tests run successfully.')
     ).catch(err => {
@@ -237,6 +237,12 @@ function parseArgs(defaults, args) {
   parser.addArgument(['-s', '--silent' ], {
     action: 'storeTrue',
     help: 'print only error messages'
+  });
+
+  parser.addArgument(['--verifiertag'], {
+    help: 'Verifier image tag\n(default: %(defaultValue)s)',
+    defaultValue: 'latest',
+    metavar: 'TAG'
   });
 
   parser.addArgument(['-H', '--host'], {
@@ -335,9 +341,10 @@ function parseArgs(defaults, args) {
 
 function singpathQueue(args, logger) {
   const fbClient = new Firebase(args.endpoint);
+  const imageTag = args.verifiertag;
 
   return verifier.dockerClient(args).then(
-    client => verifier.singpathQueue(fbClient, client, {logger})
+    client => verifier.singpathQueue(fbClient, client, {logger, imageTag})
   );
 }
 
@@ -467,7 +474,7 @@ function pushSolutions(q, solutions, logger) {
   );
 }
 
-function testSolutions(dockerClient, solutions, logger) {
+function testSolutions(dockerClient, solutions, imageTag, logger) {
   return solutions.reduce((chain, solution) => {
     const language = solution.language;
     const tests = solution.tests;
@@ -479,7 +486,7 @@ function testSolutions(dockerClient, solutions, logger) {
 
       logger.info('Running "%s"...', JSON.stringify(s, null, '  '));
 
-      return verifier.verify(dockerClient, s, {logger});
+      return verifier.verify(dockerClient, s, {logger, imageTag});
     }).then(
       result => assertEqual(result, expected)
     );
@@ -500,7 +507,9 @@ function assertEqual(actual, expected) {
   return actual;
 }
 
-function buildImage(image, logger) {
+function buildImage(image, tag, logger) {
+  tag = tag || 'latest';
+
   return new Promise((resolve, reject) => {
     const options = {
       stdio: 'inherit',
@@ -508,7 +517,7 @@ function buildImage(image, logger) {
     };
     const docker = spawn(
       'docker',
-      ['build', '-t', `${image.name}:latest`, image.path],
+      ['build', '-t', `${image.name}:${tag}`, image.path],
       options
     );
 

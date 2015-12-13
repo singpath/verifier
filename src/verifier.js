@@ -180,11 +180,12 @@ exports.verify = function verify(client, payload, options) {
   }
 
   options = options || {};
-  
+
   const logger = options.logger || console;
+  const tag = options.imageTag || 'latest';
 
   return new Promise((resolve, reject) => {
-    client.createContainer(containerOptions(payload), (err, container) => {
+    client.createContainer(containerOptions(payload, tag), (err, container) => {
       if (err) {
         reject(err);
       } else {
@@ -211,7 +212,7 @@ exports.verify = function verify(client, payload, options) {
   });
 };
 
-function containerOptions(payload) {
+function containerOptions(payload, tag) {
   return {
     'AttachStdin': false,
     'AttachStdout': true,
@@ -221,7 +222,7 @@ function containerOptions(payload) {
       'solution': payload.solution,
       'tests': payload.tests
     })],
-    'Image': verifierImages[payload.language].name,
+    'Image': `${verifierImages[payload.language].name}:${tag}`,
     'HostConfig': {
       'CapDrop': ['All'],
       'NetworkMode': 'none'

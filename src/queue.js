@@ -28,6 +28,7 @@ module.exports = class Queue extends events.EventEmitter {
     this.ref = firebaseClient;
     this.dockerClient = dockerClient;
     this.logger = options.logger || console;
+    this.imageTag = options.imageTag;
     this.opts = {
       presenceDelay: options.presenceDelay || DEFAULT_PRESENCE_DELAY,
       taskTimeout: options.taskTimeout || DEFAULT_TASK_TIMEOUT,
@@ -289,7 +290,10 @@ module.exports = class Queue extends events.EventEmitter {
     return this.claimTask(task).catch(
       () => Promise.reject(skip)
     ).then(
-      () => verifier.verify(this.dockerClient, task.data.payload, {logger: this.logger})
+      () => verifier.verify(this.dockerClient, task.data.payload, {
+        logger: this.logger,
+        imageTag: this.imageTag
+      })
     ).then(results => {
       this.logger.info('Task ("%s") run.', task.key);
       this.logger.debug('Task ("%s") run: "%j".', task.key, results);

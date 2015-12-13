@@ -23,19 +23,14 @@ const ERROR_INVALID_ENDOPOINT = 'Invalid queue endpoint.';
 const HINT_AUTH_SECRET = 'A Firebase auth secret can be found at https://%s.firebaseio.com/?page=Admin';
 
 const DEFAULT_SETTINGS = {
-  endpoint: 'https://singpath-play.firebaseio.com/singpath/queues/default',
-  host: 'unix:///var/run/docker.sock',
-  tls: false
+  endpoint: 'https://singpath-play.firebaseio.com/singpath/queues/default'
 };
 
 const EPILOG = `Environment variables:
   SINGPATH_FIREBASE_SECRET  Firebase auth secret.
   SINGPATH_FIREBASE_QUEUE   Path to the firebase queue.
-                            (default: ${DEFAULT_SETTINGS.endpoint})
   DOCKER_HOST               Docker daemon socket to connect to.
-                            (default: ${DEFAULT_SETTINGS.host})
   DOCKER_TLS_VERIFY         Use TLS with the Docker daemon.
-                            (default: 0)
   DOCKER_CERT_PATH          Location of your docker-machine authentication keys
 
 Config:
@@ -201,20 +196,6 @@ function envSettings(defaults) {
     settings.endpoint = process.env.SINGPATH_FIREBASE_QUEUE;
   }
 
-  if (process.env.DOCKER_HOST) {
-    settings.host = process.env.DOCKER_HOST;
-  }
-
-  if (process.env.DOCKER_TLS_VERIFY === '1') {
-    settings.tls = true;
-  }
-
-  if (process.env.DOCKER_CERT_PATH)   {
-    settings.tlscacert = path.join(process.env.DOCKER_CERT_PATH, 'ca.pem');
-    settings.tlscert = path.join(process.env.DOCKER_CERT_PATH, 'cert.pem');
-    settings.tlskey = path.join(process.env.DOCKER_CERT_PATH, 'key.pem');
-  }
-
   return settings;
 }
 
@@ -243,27 +224,6 @@ function parseArgs(defaults, args) {
     help: 'Verifier image tag\n(default: %(defaultValue)s)',
     defaultValue: 'latest',
     metavar: 'TAG'
-  });
-
-  parser.addArgument(['-H', '--host'], {
-    help: 'Docker daemon socket to connect to\n(default: %(defaultValue)s)'
-  });
-
-  parser.addArgument(['--tls'], {
-    help: 'Use TLS with the Docker daemon\n(default: %(defaultValue)s)',
-    action: 'storeTrue'
-  });
-
-  parser.addArgument(['--tlscacert'], {
-    help: 'Trust certs signed only by this CA\n(default: %(defaultValue)s)'
-  });
-
-  parser.addArgument(['--tlscert'], {
-    help: 'Path to TLS certificate file\n(default: %(defaultValue)s)'
-  });
-
-  parser.addArgument(['--tlskey'], {
-    help: 'Path to TLS key file\n(default: %(defaultValue)s)'
   });
 
   const subparsers = parser.addSubparsers();

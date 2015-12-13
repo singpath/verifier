@@ -1,7 +1,8 @@
 'use strict';
 
+const Docker = require('dockerode');
+
 const auth = require('./auth');
-const dockerClient = require('./docker_client');
 const images = require('../images.json');
 const logger = require('./logger');
 const Queue = require('./queue');
@@ -9,7 +10,7 @@ const verifier = require('./verifier');
 
 
 exports.auth = auth;
-exports.dockerClient = dockerClient;
+exports.dockerClient = () => Promise.resolve(new Docker());
 exports.logger = logger.create;
 exports.logger.levels = logger.levels;
 exports.singpathQueue = singpathQueue;

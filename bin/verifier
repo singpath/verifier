@@ -24,13 +24,15 @@ const HINT_AUTH_SECRET = 'A Firebase auth secret can be found at https://%s.fire
 
 const DEFAULT_SETTINGS = {
   endpoint: 'https://singpath-play.firebaseio.com/singpath/queues/default',
-  maxworker: 10
+  maxworker: 10,
+  verifiertag: 'latest'
 };
 
 const EPILOG = `Environment variables:
   SINGPATH_FIREBASE_SECRET      Firebase auth secret.
   SINGPATH_FIREBASE_QUEUE       Path to the firebase queue.
   SINGPATH_FIREBASE_MAX_WORKER  Concurrent verification limit.
+  SINGPATH_IMAGE_TAG            Verifier image tag.
   DOCKER_HOST                   Docker daemon socket to connect to.
   DOCKER_TLS_VERIFY             Use TLS with the Docker daemon.
   DOCKER_CERT_PATH              Location of your docker-machine authentication
@@ -191,17 +193,18 @@ function fileSettings(settingPath, defaults) {
 function envSettings(defaults) {
   const settings = Object.assign({}, defaults);
 
-  if (process.env.SINGPATH_FIREBASE_SECRET) {
-    settings.secret = process.env.SINGPATH_FIREBASE_SECRET;
+  function update (key, envKey) {
+    if (process.env[envKey] == null) {
+      return;
+    }
+
+    settings[key] = process.env[envKey];
   }
 
-  if (process.env.SINGPATH_FIREBASE_QUEUE) {
-    settings.endpoint = process.env.SINGPATH_FIREBASE_QUEUE;
-  }
-
-  if (process.env.SINGPATH_FIREBASE_MAX_WORKER) {
-    settings.maxworker = process.env.SINGPATH_FIREBASE_MAX_WORKER;
-  }
+  update('secret', 'SINGPATH_FIREBASE_SECRET');
+  update('endpoint', 'SINGPATH_FIREBASE_QUEUE');
+  update('maxworker', 'SINGPATH_FIREBASE_MAX_WORKER');
+  update('verifiertag', 'SINGPATH_IMAGE_TAG');
 
   return settings;
 }
@@ -229,7 +232,6 @@ function parseArgs(defaults, args) {
 
   parser.addArgument(['--verifiertag'], {
     help: 'Verifier image tag\n(default: %(defaultValue)s)',
-    defaultValue: 'latest',
     metavar: 'TAG'
   });
 

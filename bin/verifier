@@ -23,7 +23,8 @@ const ERROR_INVALID_ENDOPOINT = 'Invalid queue endpoint.';
 const HINT_AUTH_SECRET = 'A Firebase auth secret can be found at https://%s.firebaseio.com/?page=Admin';
 
 const DEFAULT_SETTINGS = {
-  endpoint: 'https://singpath-play.firebaseio.com/singpath/queues/default'
+  endpoint: 'https://singpath-play.firebaseio.com/singpath/queues/default',
+  maxworker: 10
 };
 
 const EPILOG = `Environment variables:
@@ -198,6 +199,10 @@ function envSettings(defaults) {
     settings.endpoint = process.env.SINGPATH_FIREBASE_QUEUE;
   }
 
+  if (process.env.SINGPATH_FIREBASE_MAX_WORKER) {
+    settings.maxworker = process.env.SINGPATH_FIREBASE_MAX_WORKER;
+  }
+
   return settings;
 }
 
@@ -280,9 +285,9 @@ function parseArgs(defaults, args) {
 
   runParser.setDefaults({func: requireSecret(cmd.run)});
   runParser.addArgument(['-c', '--maxworker'], {
-    help: 'Concurrent verification limit',
+    help: 'Concurrent verification limit\n(default: %(defaultValue)s)',
     type: 'int',
-    defaultValue: 10
+    defaultValue: defaults.maxworker
   });
 
   pushParser.setDefaults({func: requireSecret(cmd.push)});

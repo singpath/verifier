@@ -5,6 +5,7 @@ const sinon = require('sinon');
 const Firebase = require('firebase');
 
 const verifier = require('../');
+const verifierComponent = require('../src/verifier');
 
 
 describe('queue', () => {
@@ -103,8 +104,6 @@ describe('queue', () => {
     });
 
   });
-
-
 
   describe('taskRelativePath', () => {
 
@@ -304,5 +303,27 @@ describe('queue', () => {
 
   });
 
+  describe('runTask', () => {
+
+    beforeEach(() => {
+      sinon.stub(queue, 'claimTask').returns(Promise.resolve());
+      sinon.stub(queue, 'saveTaskResults').returns(Promise.resolve());
+      sinon.stub(queue, 'removeTaskClaim').returns(Promise.resolve());
+      sinon.stub(queue.tasksToRun, 'shift').returns();
+      sinon.stub(verifierComponent, 'verify').returns(Promise.resolve());
+    });
+
+    it('should run the next task in queue after completion', done => {
+      sinon.spy(queue, 'runTask');
+      queue.tasksToRun.shift.onFirstCall().returns({});
+      queue.tasksToRun.shift.onSecondCall().returns(undefined);
+
+      queue.runTask({}).then(() => {
+        sinon.assert.calledThrice(queue.runTask);
+        done();
+      }).catch(done);
+    });
+
+  });
 
 });

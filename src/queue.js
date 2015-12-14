@@ -314,8 +314,12 @@ module.exports = class Queue extends events.EventEmitter {
       () => this.taskRunning--,
       () => this.taskRunning--
     ).then(
-      () => this.run(this.tasksToRun.shift())
-    );
+      () => this.runTask(this.tasksToRun.shift())
+    ).catch(err => {
+      this.logger.error(err);
+
+      return Promise.reject(err);
+    });
   }
 
   /**

@@ -35,6 +35,10 @@ module.exports = class Queue extends events.EventEmitter {
       maxWorker: options.maxWorker || DEFAULT_MAX_WORKER
     };
 
+    if (this.opts.maxWorker < 1) {
+      this.opts.maxWorker = 1;
+    }
+
     this.queueName = this.ref.key();
     this.singpathRef = this.ref.root().child('singpath');
     this.tasksRef = this.ref.child('tasks');
@@ -312,7 +316,6 @@ module.exports = class Queue extends events.EventEmitter {
     ).then(
       () => this.run(this.tasksToRun.shift())
     );
-
   }
 
   /**

@@ -27,11 +27,13 @@ const DEFAULT_SETTINGS = {
 };
 
 const EPILOG = `Environment variables:
-  SINGPATH_FIREBASE_SECRET  Firebase auth secret.
-  SINGPATH_FIREBASE_QUEUE   Path to the firebase queue.
-  DOCKER_HOST               Docker daemon socket to connect to.
-  DOCKER_TLS_VERIFY         Use TLS with the Docker daemon.
-  DOCKER_CERT_PATH          Location of your docker-machine authentication keys
+  SINGPATH_FIREBASE_SECRET      Firebase auth secret.
+  SINGPATH_FIREBASE_QUEUE       Path to the firebase queue.
+  SINGPATH_FIREBASE_MAX_WORKER  Concurrent verification limit.
+  DOCKER_HOST                   Docker daemon socket to connect to.
+  DOCKER_TLS_VERIFY             Use TLS with the Docker daemon.
+  DOCKER_CERT_PATH              Location of your docker-machine authentication
+                                keys.
 
 Config:
   You can set the default values with a JSON file named '.singpathrc' in your
@@ -277,6 +279,11 @@ function parseArgs(defaults, args) {
   });
 
   runParser.setDefaults({func: requireSecret(cmd.run)});
+  runParser.addArgument(['-c', '--maxworker'], {
+    help: 'Concurrent verification limit',
+    type: 'int',
+    defaultValue: 10
+  });
 
   pushParser.setDefaults({func: requireSecret(cmd.push)});
   pushParser.addArgument(['payload'], {
@@ -302,9 +309,12 @@ function parseArgs(defaults, args) {
 function singpathQueue(args, logger) {
   const fbClient = new Firebase(args.endpoint);
   const imageTag = args.verifiertag;
+  const maxWorker = args.maxworker;
 
   return verifier.dockerClient(args).then(
-    client => verifier.singpathQueue(fbClient, client, {logger, imageTag})
+    client => verifier.singpathQueue(
+      fbClient, client, {logger, imageTag, maxWorker}
+    )
   );
 }
 

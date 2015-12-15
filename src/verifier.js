@@ -161,6 +161,10 @@ class Verifier {
   }
 }
 
+const support = exports.support = function(lang) {
+  return verifierImages[lang] !== undefined;
+};
+
 /**
  * Run solution inside a docker container.
  *
@@ -174,9 +178,9 @@ exports.verify = function verify(client, payload, options) {
   if (
     !payload ||
     !payload.language ||
-    !verifierImages[payload.language]
+    !support[payload.language]
   ) {
-    return Promise.reject(new Error('Unsupported language.'));
+    return Promise.resolve({solved: false, errors: 'Unsupported language'});
   }
 
   options = options || {};

@@ -266,6 +266,13 @@ module.exports = class Queue extends events.EventEmitter {
    * @param  {Object} data Task body
    */
   sheduleTask(key, data) {
+    const language = data && data.payload && data.payload.language;
+
+    if (!verifier.support(language)) {
+      this.logger.info('Task ("%s") language ("%s") is not supported', key, language);
+      return;
+    }
+
     this.tasksToRun.push({key, data});
     this.logger.info('Task ("%s") run scheduled', key);
     this.logger.debug('Task ("%s") run scheduled with "%j"', key, data);

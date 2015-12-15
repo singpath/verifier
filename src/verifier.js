@@ -178,7 +178,7 @@ exports.verify = function verify(client, payload, options) {
   if (
     !payload ||
     !payload.language ||
-    !support[payload.language]
+    !support(payload.language)
   ) {
     return Promise.resolve({solved: false, errors: 'Unsupported language'});
   }

@@ -70,7 +70,7 @@ function main() {
       level = verifier.logger.levels.ERROR;
     }
 
-    return args.func(args, verifier.logger(process.stderr, level));
+    return args.func(args, verifier.logger({level}));
   }).catch( err => {
     console.error('Unexpected error: %s\n\n%s', err, err.stack);
     process.exit(1);
@@ -151,8 +151,19 @@ const cmd = {
       const image = verifier.images[language];
 
       return chain.then(() => {
-        logger.info('building image "%s"', image.name);
+        logger.info('building image "%s"...', image.name);
         return buildImage(image, args.verifiertag, logger);
+      });
+    }, Promise.resolve());
+  },
+
+  pull(args, logger) {
+    return Object.keys(verifier.images).reduce((chain, language) => {
+      const image = verifier.images[language];
+
+      return chain.then(() => {
+        logger.info('pulling image "%s"...', image.name);
+        return pullImage(image, args.verifiertag, logger);
       });
     }, Promise.resolve());
   },
@@ -260,6 +271,12 @@ function parseArgs(defaults, args) {
     formatterClass: argparse.RawTextHelpFormatter,
     epilog: EPILOG
   });
+  const pullParser = subparsers.addParser('pull-verifiers', {
+    addHelp: true,
+    description: 'Pull verifier images',
+    formatterClass: argparse.RawTextHelpFormatter,
+    epilog: EPILOG
+  });
   const testParser = subparsers.addParser('test', {
     addHelp: true,
     description: (
@@ -300,6 +317,7 @@ function parseArgs(defaults, args) {
   settingsParser.setDefaults({func: cmd.settings});
 
   buildParser.setDefaults({func: cmd.build});
+  pullParser.setDefaults({func: cmd.pull});
 
   testParser.addArgument(['payload'], {
     help: (
@@ -417,7 +435,7 @@ function loadSolutions(yamlString, options) {
 
     if (!language || !tests || !solution) {
       logger.error(
-        'The verifier requires a language, some tests and a solution. Got: %s',
+        'The verifier requires a language, some tests and a solution. Got: %j',
         doc
       );
       return;
@@ -500,6 +518,31 @@ function buildImage(image, tag, logger) {
 
     logger.debug(
       'Building "%s" at "%s" from "%s"', image.name, image.path, options.cwd
+    );
+
+    docker.on('error', reject);
+    docker.on('close', function (code) {
+      if (code !== 0) {
+        reject(code);
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+function pullImage(image, tag) {
+  tag = tag || 'latest';
+
+  return new Promise((resolve, reject) => {
+    const options = {
+      stdio: 'inherit',
+      cwd: path.resolve(__dirname, '../')
+    };
+    const docker = spawn(
+      'docker',
+      ['pull', `${image.name}:${tag}`],
+      options
     );
 
     docker.on('error', reject);

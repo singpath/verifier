@@ -8,34 +8,36 @@ const ERROR = 30;
 
 exports.levels = {DEBUG, INFO, ERROR};
 
+
 class Logger {
 
-  constructor(stream, level) {
-    this.stream = stream;
-    this.level = level || DEBUG;
-  }
+  constructor(options) {
+    options = options || {};
 
-  now() {
-    return new Date().toISOString().replace('T', ' ').slice(0, -1);
-  }
+    this.stream = options.stream || process.stderr;
+    this.level = options.level || INFO;
+    this.formatter = options.formatter || {
+      now() {
+        return new Date().toISOString().replace('T', ' ').slice(0, -1);
+      },
 
-  _write(args) {
-    this.stream.write(util.format.apply(util, args));
+      format(args) {
+        if (args.length < 1) {
+          return;
+        }
+
+        args[0] = `${this.now()} - ${args[0]}\n`;
+        return util.format.apply(util, args);
+      }
+    };
   }
 
   _log(args, level) {
-    args = Array.from(args);
-
     if (level < this.level) {
       return;
     }
 
-    if (args.length < 1) {
-      return;
-    }
-
-    args[0] = `${this.now()} - ${args[0]}\n`;
-    this._write(args);
+    this.stream.write(this.formatter.format(args));
   }
 
   log() {

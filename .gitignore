@@ -1,3 +1,4 @@
 node_modules
 .singpathrc
 coverage
+.singpath-verifiers.json

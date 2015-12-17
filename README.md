@@ -25,11 +25,12 @@ to `https://some-firebase-id.firebaseio.com/singpath/queuedSolutions/pathId/leve
 creating a new VM, booting it up and installing docker, and allows you to manage
 their containers remotely with your local docker client.
 
-Using `docker-machine` is a simple way to boot up a docker host but doesn't allow
-to easily share the control of the machine. It's best suited for verifier
-needing to run temporally.
+Using `docker-machine` is a simple way to boot up a docker host and is
+the recommended way to run Docker on OS X and Windows via VirtualBox driver.
+But doesn't allow to easily share the control of the machine. It's best suited
+for verifier needing to run temporally.
 
-The deployment script works with a local docker host as well. You can use it
+The deployment script works without `docker-machine` as well; you can use it
 on any server with docker 1.6+ installed and running; you would just skip the
 first two steps in the example bellow.
 
@@ -42,17 +43,16 @@ first two steps in the example bellow.
 - `curl` in this example, but you can use any other way to download our
   python deployment script: wget, a browser or clone this repository.
 
-`docker-machine` is the recommended way to run Docker on OS X and Windows via
-VirtualBox driver. You can install `docker` and `docker-machine` using
+You can install `docker` and `docker-machine` on OS X and Windows using
 [Docker Tools](https://www.docker.com/docker-toolbox).
 
 
 ### Using GCE
 
-`docker-machine` has [driver](https://docs.docker.com/machine/drivers/)
-for many VM provider we will use Google Cloud Engine in this example.
+`docker-machine` has [drivers](https://docs.docker.com/machine/drivers/)
+for many VM provider. We will use the Google Cloud Engine in this example.
 
-1. Create a new docker host:
+1. Create a new docker host on Google Cloud platform:
     ```shell
     export PROJECT_ID="your-google-project-id"
     docker-machine create --driver google \
@@ -62,6 +62,11 @@ for many VM provider we will use Google Cloud Engine in this example.
       remote-docker
     ```
 
+    To create a Virtualbox machine instead:
+    ```
+    docker-machine create --driver virtualbox remote-docker
+    ```
+
 2. In all your terminals, set your docker client to use this docker machine:
     ```shell
     eval "$(docker-machine env remote-docker)"
@@ -69,7 +74,7 @@ for many VM provider we will use Google Cloud Engine in this example.
 
 3. Download the verifier client:
     ```shell
-    curl -O https://raw.githubusercontent.com/singpath/verifier/master/deployment/verifier-machine.py
+    curl -O https://raw.githubusercontent.com/singpath/verifier/master/verifier-machine.py
     chmod +x verifier-machine.py
     ```
 
@@ -78,31 +83,20 @@ for many VM provider we will use Google Cloud Engine in this example.
     ./verifier-machine pull latest
     ```
 
-5. Start the verifier daemon on the remote docker machine:
+5. Setup a verifier profile:
+    ```shell
+    ./verifier-machine init some-profile-name
+    ```
+    its saves a verifier settings in `./.singpath-verifiers.json` as a profile.
+    `./.singpath-verifiers.json` can hold settings for verifier targeting
+    different Firebase db, queue or machine.
+
+6. Start the verifier:
     ```shell
     ./verifier-machine start \
-        --docker-group 999 \
-        --firebase-auth-secret xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
-        --firebase-id some-firebase-id \
-        --firebase-queue default \
+        --profile-id some-profile-name \
         --interactive
     ```
-
-Instead of passing those arguments in the command line, you save them in
-`./.singpath-verifiers.json` as a profile. `./.singpath-verifiers.json` can
-save multiple set of settings to target different firebase db, queue or machine.
-
-To setup a profile run:
-```shell
-./verifier-machine init some-id
-```
-
-Then to start the daemon container:
-```shell
-./verifier-machine start \
-    --profile-id some-id \
-    --interactive
-```
-
-You would remove `--interactive` argument to let the container run in daemon
-mode and `./verifier-machine stop --profile-id remote-docker` to stop it.
+    You would remove `--interactive` argument to let the container run in daemon
+    mode and `./verifier-machine stop --profile-id some-profile-name` to stop
+    it.

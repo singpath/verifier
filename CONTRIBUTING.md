@@ -99,7 +99,7 @@ docker run -ti --rm \
     -v /var/run/docker.sock:/var/run/docker.sock \
     --group-add 100 \
     -e SINGPATH_FIREBASE_SECRET="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
-    -e SINGPATH_FIREBASE_ENDPOINT="https://singpath-play.firebaseio.com/singpath/queues/default" \
+    -e SINGPATH_FIREBASE_QUEUE="https://singpath-play.firebaseio.com/singpath/queues/default" \
     singpath/verifier2:latest
 ```
 

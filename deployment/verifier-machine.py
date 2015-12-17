@@ -425,13 +425,22 @@ def prompt_secret(firebase_id, opts):
 def ask_settings(opts):
     settings = {}
 
-    settings[MACHINE_ID_KEY] = prompt('\nMachine ID', opts.machine_id)
+    settings[MACHINE_ID_KEY] = prompt(
+        'Please provide the docker machine name \n'
+        '(leave empty if docker runs on this OS)\n'
+        '\nDocker machine name', opts.machine_id
+    )
     settings[FB_ID_KEY] = prompt('\nFirebase ID', opts.firebase_id)
     settings[FB_QUEUE_KEY] = prompt(
         '\nFirebase queue name', opts.firebase_queue
     )
-    settings[MAX_WORKER_KEY] = prompt('\nMax worker', opts.max_worker)
-    settings[VERIFIER_TAG_KEY] = prompt('\nVerifier tag', opts.verifier_tag)
+    settings[MAX_WORKER_KEY] = prompt(
+        'How many many solution should that verifier run at the same time?\n'
+        '\nMax worker', opts.max_worker
+    )
+    settings[VERIFIER_TAG_KEY] = prompt(
+        'Which docker image tag (version) of the verifier should run?\n'
+        '\nVerifier tag', opts.verifier_tag)
     settings[FB_SECRET_KEY] = prompt_secret(settings[FB_ID_KEY], opts)
 
     return settings

@@ -151,7 +151,7 @@ const cmd = {
       const image = verifier.images[language];
 
       return chain.then(() => {
-        logger.info('building image "%s"', image.name);
+        logger.info('building image "%s"...', image.name);
         return buildImage(image, args.verifiertag, logger);
       });
     }, Promise.resolve());
@@ -435,7 +435,7 @@ function loadSolutions(yamlString, options) {
 
     if (!language || !tests || !solution) {
       logger.error(
-        'The verifier requires a language, some tests and a solution. Got: %s',
+        'The verifier requires a language, some tests and a solution. Got: %j',
         doc
       );
       return;

@@ -87,7 +87,7 @@ for many VM provider. We will use the Google Cloud Engine in this example.
     ```shell
     ./verifier-machine init some-profile-name
     ```
-    its saves a verifier settings in `./.singpath-verifiers.json` as a profile.
+    it saves a verifier settings in `./.singpath-verifiers.json` as a profile.
     `./.singpath-verifiers.json` can hold settings for verifier targeting
     different Firebase db, queue or machine.
 

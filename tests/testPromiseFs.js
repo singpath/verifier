@@ -8,56 +8,48 @@ const readFile = promiseFs.readFile;
 
 describe('pathExist', function() {
 
-  it('should resolve to the file path the the file exist', done => {
+  it('should resolve to the file path the the file exist', () => {
     const expected = path.join(__dirname, '/fixtures/passes.txt');
 
-    pathExist(expected).then(filePath => {
-      expect(filePath).to.be(expected);
-      done();
-    }).catch(
-      err => done(err)
+    return pathExist(expected).then(
+      filePath => expect(filePath).to.be(expected)
     );
   });
 
-  it('should reject with an IOerror', done => {
+  it('should reject with an IOerror', () => {
     const filePath = './not.found';
 
-    pathExist('./not.found').catch(err => {
-      expect(err.isIOError).to.be.ok();
-      expect(err.path).to.be(filePath);
-      done();
-      return Promise.reject(err);
-    }).then(() => {
-      done(new Error('The file should not exist.'));
-    });
+    pathExist('./not.found').then(
+      () => Promise.reject(new Error('The file should not exist.')),
+      err => {
+        expect(err.isIOError).to.be.ok();
+        expect(err.path).to.be(filePath);
+      }
+    );
   });
 
 });
 
 describe('readFile', function() {
 
-  it('should resolve to the file content', done => {
+  it('should resolve to the file content', () => {
     const filePath = path.join(__dirname, '/fixtures/passes.txt');
 
-    readFile(filePath).then(content => {
-      expect(content.toString()).to.be('passes');
-      done();
-    }).catch(
-      err => done(err)
+    return readFile(filePath).then(
+      content => expect(content.toString()).to.be('passes')
     );
   });
 
-  it('should reject with an IOerror', done => {
+  it('should reject with an IOerror', () => {
     const filePath = './not.found';
 
-    readFile('./not.found').catch(err => {
-      expect(err.isIOError).to.be.ok();
-      expect(err.path).to.be(filePath);
-      done();
-      return Promise.reject(err);
-    }).then(() => {
-      done(new Error('The file should not exist.'));
-    });
+    return readFile('./not.found').then(
+      () => Promise.reject(new Error('The file should not exist.')),
+      err => {
+        expect(err.isIOError).to.be.ok();
+        expect(err.path).to.be(filePath);
+      }
+    );
   });
 
 });

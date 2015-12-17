@@ -55,93 +55,85 @@ describe('verifier', () => {
       };
     });
 
-    it('should resolve with an unsupported language error response', done => {
+    it('should resolve with an unsupported language error response', () => {
       payload.language = 'dinolang';
 
-      verifier.verify(client, payload).then(resp => {
+      return verifier.verify(client, payload).then(resp => {
         expect(resp.solved).to.be(false);
         expect(resp.errors).to.be('Unsupported language');
-        done();
-      }).catch(done);
+      });
     });
 
-    it('should run the payload if the language is supported', done => {
-      verifier.verify(client, payload).then(resp => {
+    it('should run the payload if the language is supported', () => {
+      return verifier.verify(client, payload).then(resp => {
         expect(resp.solved).to.be(true);
-        done();
-      }).catch(done);
+      });
     });
 
-    it('should remove the payload after running the solution', done => {
-      verifier.verify(client, payload).then(() => {
+    it('should remove the payload after running the solution', () => {
+      return verifier.verify(client, payload).then(() => {
         sinon.assert.calledOnce(container.remove);
         sinon.assert.calledWithExactly(
           container.remove,
           {force: true},
           sinon.match.func
         );
-        done();
-      }).catch(done);
+      });
     });
 
-    it('should create a container to run the payload', done => {
-      verifier.verify(client, payload).then(() => {
+    it('should create a container to run the payload', () => {
+      return verifier.verify(client, payload).then(() => {
         sinon.assert.calledOnce(client.createContainer);
         sinon.assert.calledWithExactly(
           client.createContainer,
           sinon.match({}),
           sinon.match.func
         );
-        done();
-      }).catch(done);
+      });
     });
 
-    it('should create a container to run the payload with a matching image', done => {
-      verifier.verify(client, payload).then(() => {
+    it('should create a container to run the payload with a matching image', () => {
+      return verifier.verify(client, payload).then(() => {
         sinon.assert.calledWithExactly(
           client.createContainer,
           sinon.match.has('Image', 'singpath/verifier2-python:latest'),
           sinon.match.func
         );
-        done();
-      }).catch(done);
+      });
     });
 
-    it('should create a container to run the payload with a matching image tag', done => {
-      verifier.verify(client, payload, {imageTag: '2.1.5'}).then(() => {
+    it('should create a container to run the payload with a matching image tag', () => {
+      return verifier.verify(client, payload, {imageTag: '2.1.5'}).then(() => {
         sinon.assert.calledWithExactly(
           client.createContainer,
           sinon.match.has('Image', 'singpath/verifier2-python:2.1.5'),
           sinon.match.func
         );
-        done();
-      }).catch(done);
+      });
     });
 
-    it('should create a container to run the payload with no capability', done => {
-      verifier.verify(client, payload, {imageTag: '2.1.5'}).then(() => {
+    it('should create a container to run the payload with no capability', () => {
+      return verifier.verify(client, payload, {imageTag: '2.1.5'}).then(() => {
         sinon.assert.calledWithExactly(
           client.createContainer,
           sinon.match.has('HostConfig', sinon.match.has('CapDrop', ['All'])),
           sinon.match.func
         );
-        done();
-      }).catch(done);
+      });
     });
 
-    it('should create a container to run the payload with no network', done => {
-      verifier.verify(client, payload, {imageTag: '2.1.5'}).then(() => {
+    it('should create a container to run the payload with no network', () => {
+      return verifier.verify(client, payload, {imageTag: '2.1.5'}).then(() => {
         sinon.assert.calledWithExactly(
           client.createContainer,
           sinon.match.has('HostConfig', sinon.match.has('NetworkMode', 'none')),
           sinon.match.func
         );
-        done();
-      }).catch(done);
+      });
     });
 
-    it('should create a container to run the payload with stdout and sdterr attached', done => {
-      verifier.verify(client, payload, {imageTag: '2.1.5'}).then(() => {
+    it('should create a container to run the payload with stdout and sdterr attached', () => {
+      return verifier.verify(client, payload, {imageTag: '2.1.5'}).then(() => {
         sinon.assert.calledWithExactly(
           client.createContainer,
           sinon.match.has('AttachStdout', true),
@@ -152,43 +144,38 @@ describe('verifier', () => {
           sinon.match.has('AttachStderr', true),
           sinon.match.func
         );
-        done();
-      }).catch(done);
+      });
     });
 
-    it('should reject if the container could not be created', done => {
+    it('should reject if the container could not be created', () => {
       const error = new Error();
 
       client.createContainer.yields(error, null);
 
-      verifier.verify(client, payload).then(
-        () => done(new Error('unexpected')),
-        err => {
-          expect(err).to.be(error);
-          done();
-        }
-      ).catch(done);
+      return verifier.verify(client, payload).then(
+        () =>  Promise.reject(new Error('unexpected')),
+        err => expect(err).to.be(error)
+      );
     });
 
-    it('should start the container', done => {
-      verifier.verify(client, payload).then(() => {
+    it('should start the container', () => {
+      return verifier.verify(client, payload).then(() => {
         sinon.assert.calledOnce(container.start);
         sinon.assert.calledWithExactly(
           container.start,
           sinon.match.object,
           sinon.match.func
         );
-        done();
-      }).catch(done);
+      });
     });
 
-    it('should reject and remove the container if it fails to start', done => {
+    it('should reject and remove the container if it fails to start', () => {
       const err = new Error('failed to start');
 
       container.start.yields(err, null);
 
-      verifier.verify(client, payload).then(
-        () => done(new Error('unexpected')),
+      return verifier.verify(client, payload).then(
+        () => Promise.reject(new Error('unexpected')),
         e => {
           expect(e.toString()).to.be(err.toString());
           sinon.assert.calledOnce(container.remove);
@@ -197,22 +184,20 @@ describe('verifier', () => {
             {force: true},
             sinon.match.func
           );
-          done();
         }
-      ).catch(done);
+      );
     });
 
-    it('should wait for the container to complete', done => {
+    it('should wait for the container to complete', () => {
       sinon.spy(container, 'wait');
 
-      verifier.verify(client, payload).then(() => {
+      return verifier.verify(client, payload).then(() => {
         sinon.assert.calledOnce(container.wait);
         sinon.assert.calledWithExactly(container.wait, sinon.match.func);
-        done();
-      }).catch(done);
+      });
     });
 
-    it('should reject and remove the container if wait fails', done => {
+    it('should reject and remove the container if wait fails', () => {
       const err = new Error('wait failed');
 
       container.wait = (cb) => {
@@ -221,8 +206,8 @@ describe('verifier', () => {
         setImmediate(cb, err, null);
       };
 
-      verifier.verify(client, payload).then(
-        () => done(new Error('unexpected')),
+      return verifier.verify(client, payload).then(
+        () => Promise.reject(new Error('unexpected')),
         e => {
           expect(e.toString()).to.be(err.toString());
           sinon.assert.calledOnce(container.remove);
@@ -231,16 +216,15 @@ describe('verifier', () => {
             {force: true},
             sinon.match.func
           );
-          done();
         }
-      ).catch(done);
+      );
     });
 
-    it('should reject and remove container if it times out', done => {
+    it('should reject and remove container if it times out', () => {
       container.wait = noop;
 
-      verifier.verify(client, payload, {timeout: 1}).then(
-        () => done(new Error('unexpected')),
+      return verifier.verify(client, payload, {timeout: 1}).then(
+        () => Promise.reject(new Error('unexpected')),
         e => {
           expect(e.message).to.be('Timeout');
           sinon.assert.calledOnce(container.remove);
@@ -249,9 +233,8 @@ describe('verifier', () => {
             {force: true},
             sinon.match.func
           );
-          done();
         }
-      ).catch(done);
+      );
     });
 
   });

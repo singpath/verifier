@@ -133,35 +133,35 @@ describe('queue', () => {
       sinon.stub(queue, 'isWorker').returns(true);
     });
 
-    it('should reject if the user is not a worker', done => {
+    it('should reject if the user is not a worker', () => {
       queue.isWorker.returns(false);
 
-      queue.savePushTaskResults(task, results).then(
-        () => done(new Error('unexpected')),
-        () => done()
+      return queue.savePushTaskResults(task, results).then(
+        () => Promise.reject(new Error('unexpected')),
+        () => undefined
       );
     });
 
-    it('should reject if the task has no solutionRef', done => {
+    it('should reject if the task has no solutionRef', () => {
       task.data.solutionRef = undefined;
 
-      queue.savePushTaskResults(task, results).then(
-        () => done(new Error('unexpected')),
-        () => done()
+      return queue.savePushTaskResults(task, results).then(
+        () => Promise.reject(new Error('unexpected')),
+        () => undefined
       );
     });
 
-    it('should reject if the task solutionRef is invalid', done => {
+    it('should reject if the task solutionRef is invalid', () => {
       task.data.solutionRef = 'some/where';
 
-      queue.savePushTaskResults(task, results).then(
-        () => done(new Error('unexpected')),
-        () => done()
+      return queue.savePushTaskResults(task, results).then(
+        () => Promise.reject(new Error('unexpected')),
+        () => undefined
       );
     });
 
-    it('should update the solution with the task result', done => {
-      queue.savePushTaskResults(task, results).then(() => {
+    it('should update the solution with the task result', () => {
+      return queue.savePushTaskResults(task, results).then(() => {
         sinon.assert.calledOnce(singpathRef.update);
         sinon.assert.calledWithExactly(
           singpathRef.update,
@@ -172,12 +172,11 @@ describe('queue', () => {
           }),
           sinon.match.func
         );
-        done();
-      }).catch(done);
+      });
     });
 
-    it('should update the task as completed and consumed', done => {
-      queue.savePushTaskResults(task, results).then(() => {
+    it('should update the task as completed and consumed', () => {
+      return queue.savePushTaskResults(task, results).then(() => {
         sinon.assert.calledOnce(singpathRef.update);
         sinon.assert.calledWithExactly(
           singpathRef.update,
@@ -188,8 +187,7 @@ describe('queue', () => {
           }),
           sinon.match.func
         );
-        done();
-      }).catch(done);
+      });
     });
 
   });
@@ -208,8 +206,8 @@ describe('queue', () => {
       sinon.stub(queue, 'isWorker').returns(true);
     });
 
-    it('should update the task as completed', done => {
-      queue.savePullTaskResults(task, results).then(() => {
+    it('should update the task as completed', () => {
+      return queue.savePullTaskResults(task, results).then(() => {
         sinon.assert.calledOnce(queue.tasksRef.child);
         sinon.assert.calledWithExactly(queue.tasksRef.child,'someTaskId');
 
@@ -223,12 +221,11 @@ describe('queue', () => {
           sinon.match.func
         );
 
-        done();
-      }).catch(done);
+      });
     });
 
-    it('should save the result with the task', done => {
-      queue.savePullTaskResults(task, results).then(() => {
+    it('should save the result with the task', () => {
+      return queue.savePullTaskResults(task, results).then(() => {
         sinon.assert.calledOnce(queue.tasksRef.child);
         sinon.assert.calledWithExactly(queue.tasksRef.child,'someTaskId');
 
@@ -238,17 +235,15 @@ describe('queue', () => {
           sinon.match({results}),
           sinon.match.func
         );
-
-        done();
-      }).catch(done);
+      });
     });
 
-    it('should reject if the user is not a worker', done => {
+    it('should reject if the user is not a worker', () => {
       queue.isWorker.returns(false);
 
-      queue.savePullTaskResults(task, results).then(
-        () => done(new Error('unexpected')),
-        () => done()
+      return queue.savePullTaskResults(task, results).then(
+        () => Promise.reject(new Error('unexpected')),
+        () => undefined
       );
     });
 
@@ -266,39 +261,38 @@ describe('queue', () => {
       sinon.stub(queue, 'savePushTaskResults').returns(Promise.resolve());
     });
 
-    it('should reject if the user is not a worker', done => {
+    it('should reject if the user is not a worker', () => {
       queue.isWorker.returns(false);
-      queue.saveTaskResults(task, results).then(
-        () => done(new Error('unexpected')),
-        () => done()
+      return queue.saveTaskResults(task, results).then(
+        () => Promise.reject(new Error('unexpected')),
+        () => undefined
       );
     });
 
-    it('should save results with the tasks', done => {
-      queue.saveTaskResults(task, results).then(() => {
+    it('should save results with the tasks', () => {
+      return queue.saveTaskResults(task, results).then(() => {
         sinon.assert.calledOnce(queue.savePullTaskResults);
         sinon.assert.notCalled(queue.savePushTaskResults);
-        done();
-      }).catch(done);
+      });
     });
 
-    it('should save the result with the solution', done => {
+    it('should save the result with the solution', () => {
       task.data.solutionRef = 'singpath/queuedSolution/some/where';
-      queue.saveTaskResults(task, results).then(() => {
+
+      return queue.saveTaskResults(task, results).then(() => {
         sinon.assert.calledOnce(queue.savePushTaskResults);
         sinon.assert.notCalled(queue.savePullTaskResults);
-        done();
-      }).catch(done);
+      });
     });
 
-    it('should save the result with the task if it fails to save them with the solution', done => {
+    it('should save the result with the task if it fails to save them with the solution', () => {
       task.data.solutionRef = 'singpath/queuedSolution/some/where';
       queue.savePushTaskResults.returns(Promise.reject());
-      queue.saveTaskResults(task, results).then(() => {
+
+      return queue.saveTaskResults(task, results).then(() => {
         sinon.assert.calledOnce(queue.savePushTaskResults);
         sinon.assert.calledOnce(queue.savePullTaskResults);
-        done();
-      }).catch(done);
+      });
     });
 
   });
@@ -317,15 +311,14 @@ describe('queue', () => {
       verifierComponent.verify.restore();
     });
 
-    it('should run the next task in queue after completion', done => {
+    it('should run the next task in queue after completion', () => {
       sinon.spy(queue, 'runTask');
       queue.tasksToRun.shift.onFirstCall().returns({});
       queue.tasksToRun.shift.onSecondCall().returns(undefined);
 
-      queue.runTask({}).then(() => {
+      return queue.runTask({}).then(() => {
         sinon.assert.calledThrice(queue.runTask);
-        done();
-      }).catch(done);
+      });
     });
 
   });

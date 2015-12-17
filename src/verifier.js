@@ -43,9 +43,10 @@ class Response extends Writable {
  */
 class VerifierError extends Error {
 
-  constructor(msg, verifier) {
-    super(msg);
+  constructor(error, verifier) {
+    super(error.message || error.toString());
     this.verifier = verifier;
+    this.error = error;
   }
 
 }
@@ -133,7 +134,7 @@ class Verifier {
 
       const to = setTimeout(() => {
         hasTimedOut = true;
-        reject(new VerifierError('Timeout', this.container));
+        reject(new VerifierError('Timeout', this));
       }, delay);
 
       this.container.wait((err) => {
@@ -143,7 +144,7 @@ class Verifier {
 
         clearTimeout(to);
         if (err) {
-          reject(err);
+          reject(new VerifierError(err, this));
         } else {
           resolve(this);
         }
@@ -161,6 +162,10 @@ class Verifier {
   }
 }
 
+const support = exports.support = function(lang) {
+  return verifierImages[lang] !== undefined;
+};
+
 /**
  * Run solution inside a docker container.
  *
@@ -174,15 +179,16 @@ exports.verify = function verify(client, payload, options) {
   if (
     !payload ||
     !payload.language ||
-    !verifierImages[payload.language]
+    !support(payload.language)
   ) {
-    return Promise.reject(new Error('Unsupported language.'));
+    return Promise.resolve({solved: false, errors: 'Unsupported language'});
   }
 
   options = options || {};
 
   const logger = options.logger || console;
   const tag = options.imageTag || 'latest';
+  const delay = options.timeout || DELAY;
 
   return new Promise((resolve, reject) => {
     client.createContainer(containerOptions(payload, tag), (err, container) => {
@@ -197,18 +203,16 @@ exports.verify = function verify(client, payload, options) {
   ).then(
     verifier => verifier.start()
   ).then(
-    verifier => verifier.wait(DELAY)
-  ).then(
-    verifier => {
-      verifier.remove().catch(err => logger.error(err));
-      return verifier.out.parse();
-    }
+    verifier => verifier.wait(delay)
   ).catch(err => {
     if (err.verifier) {
       err.verifier.remove().catch(err => logger.error(err));
     }
 
     return Promise.reject(err);
+  }).then(verifier => {
+    verifier.remove().catch(err => logger.error(err));
+    return verifier.out.parse();
   });
 };
 

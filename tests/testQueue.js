@@ -313,6 +313,10 @@ describe('queue', () => {
       sinon.stub(verifierComponent, 'verify').returns(Promise.resolve());
     });
 
+    afterEach(() => {
+      verifierComponent.verify.restore();
+    });
+
     it('should run the next task in queue after completion', done => {
       sinon.spy(queue, 'runTask');
       queue.tasksToRun.shift.onFirstCall().returns({});
@@ -322,6 +326,40 @@ describe('queue', () => {
         sinon.assert.calledThrice(queue.runTask);
         done();
       }).catch(done);
+    });
+
+  });
+
+  describe('sheduleTask', () => {
+
+    beforeEach(() => {
+      sinon.stub(queue.tasksToRun, 'push');
+      sinon.stub(queue.tasksToRun, 'shift');
+      sinon.stub(queue, 'runTask');
+    });
+
+    it('should skip task with unsupported language', () => {
+      const task = {
+        payload: {
+          language: 'dinolang'
+        }
+      };
+
+      queue.sheduleTask('someTaskId', task);
+      sinon.assert.notCalled(queue.tasksToRun.push);
+    });
+
+    it('should shedule task if the language is supported', () => {
+      const key = 'someTaskId';
+      const data = {
+        payload: {
+          language: 'java'
+        }
+      };
+
+      queue.sheduleTask(key, data);
+      sinon.assert.calledOnce(queue.tasksToRun.push);
+      sinon.assert.calledWithExactly(queue.tasksToRun.push, {key, data});
     });
 
   });

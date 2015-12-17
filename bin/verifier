@@ -70,7 +70,7 @@ function main() {
       level = verifier.logger.levels.ERROR;
     }
 
-    return args.func(args, verifier.logger(process.stderr, level));
+    return args.func(args, verifier.logger({level}));
   }).catch( err => {
     console.error('Unexpected error: %s\n\n%s', err, err.stack);
     process.exit(1);

@@ -39,6 +39,8 @@ MACHINE_ID_KEY = 'machineId'
 FB_ID_KEY = 'firebaseID'
 FB_QUEUE_KEY = 'firebaseQueueName'
 FB_SECRET_KEY = 'firebaseSecret'
+MAX_WORKER_KEY = 'maxWorker'
+VERIFIER_TAG_KEY = 'verifierTag'
 
 DEFAULT_SETTINGS = {
     FB_ID_KEY: 'singpath-play',
@@ -46,6 +48,8 @@ DEFAULT_SETTINGS = {
     FB_SECRET_KEY: None,
     MACHINE_ID_KEY: 'default',
     DOCKER_GID_KEY: None,
+    MAX_WORKER_KEY: '1',
+    VERIFIER_TAG_KEY: 'latest'
 }
 
 SOCKET_PATH = '/var/run/docker.sock'
@@ -58,9 +62,11 @@ cat /etc/group | grep "^$DOCKER_GROUP_NAME" | cut -d: -f3
 def main():
     settings = Settings()
     args = settings.parse_args()
+    print('1st parsing:', args)
     if args.profile_id:
         settings.load(args.profile_id)
         args = settings.parse_args()
+        print('with settings:', args)
 
     logging.basicConfig(
         format='%(asctime)s - %(message)s', level=args.level
@@ -85,21 +91,21 @@ class Settings(object):
 
     @classmethod
     def save(cls, profile_id, settings, path='./.singpath-verifiers.json'):
-        settings = cls()
-        settings.load(profile_id)
-        settings.profiles[profile_id] = settings
+        inst = cls()
+        inst.load(profile_id)
+        inst.profiles[profile_id] = settings
         try:
             logging.info('Saving profile "%s"...', profile_id)
             with open(path, 'w') as fp:
                 json.dump(
-                    settings.profiles,
+                    inst.profiles,
                     fp=fp,
                     sort_keys=True,
                     indent=4,
                     separators=(',', ': ')
                 )
         except Exception as e:
-            logging.error('Failed to save "%s": %s.' % path, e)
+            logging.error('Failed to save "%s": %s.', path, e)
 
     def _settings(self):
         if self.profile_id is None:
@@ -107,28 +113,14 @@ class Settings(object):
         else:
             return self.profiles.get(self.profile_id, {})
 
+    def get(self, name):
+        return self._settings().get(name, DEFAULT_SETTINGS.get(name))
+
     def parse_args(self, args=None):
         parser = self.parser()
-        settings = self._settings()
-        parser.set_defaults(
-            profile_id=self.profile_id,
-            firebase_id=settings.get(
-                FB_ID_KEY, DEFAULT_SETTINGS[FB_ID_KEY]
-            ),
-            firebase_queue=settings.get(
-                FB_QUEUE_KEY, DEFAULT_SETTINGS[FB_QUEUE_KEY]
-            ),
-            firebase_auth_secret=settings.get(
-                FB_SECRET_KEY, DEFAULT_SETTINGS[FB_SECRET_KEY]
-            ),
-            docker_gid=settings.get(
-                DOCKER_GID_KEY, DEFAULT_SETTINGS[DOCKER_GID_KEY]
-            ),
-        )
         return parser.parse_args(args)
 
-    @classmethod
-    def parser(cls):
+    def parser(self):
         parser = argparse.ArgumentParser(
             description=(
                 'Manage the verifier daemon container. '
@@ -146,26 +138,21 @@ class Settings(object):
             '-v', '--verbose',
             action='store_const', dest='level', const=logging.DEBUG
         )
-        parser.set_defaults(level=logging.INFO)
+        parser.set_defaults(
+            level=logging.INFO,
+            profile_id=None
+        )
 
         subparsers = parser.add_subparsers()
-        cls.pull_parser(subparsers)
-        cls.init_parser(subparsers)
-        cls.start_parser(subparsers)
-        cls.stop_parser(subparsers)
-        cls.push_parser(subparsers)
-
-        parser.set_defaults(
-            firebase_id=DEFAULT_SETTINGS[FB_ID_KEY],
-            firebase_queue=DEFAULT_SETTINGS[FB_QUEUE_KEY],
-            firebase_auth_secret=DEFAULT_SETTINGS[FB_SECRET_KEY],
-            docker_gid=DEFAULT_SETTINGS[DOCKER_GID_KEY],
-        )
+        self.pull_parser(subparsers)
+        self.init_parser(subparsers)
+        self.start_parser(subparsers)
+        self.stop_parser(subparsers)
+        self.push_parser(subparsers)
 
         return parser
 
-    @staticmethod
-    def pull_parser(subparsers):
+    def pull_parser(self, subparsers):
         parser = subparsers.add_parser(
             'pull',
             help='pull the verifier daemon docker image',
@@ -174,12 +161,16 @@ class Settings(object):
             ),
         )
 
-        parser.add_argument('tag')
-        parser.set_defaults(tag='latest')
-        parser.set_defaults(func=pull)
+        parser.add_argument('-p', '--profile-id')
+        parser.add_argument('-g', '--docker-gid')
+        parser.add_argument('-t', '--verifier-tag')
+        parser.set_defaults(
+            func=pull,
+            docker_gid=self.get(DOCKER_GID_KEY),
+            verifier_tag=self.get(VERIFIER_TAG_KEY),
+        )
 
-    @staticmethod
-    def init_parser(subparsers):
+    def init_parser(self, subparsers):
         parser = subparsers.add_parser(
             'init',
             help='configure verifier',
@@ -188,16 +179,26 @@ class Settings(object):
                 './.singpath-verifiers.json.'
             ),
         )
-        parser.add_argument('profile-id')
+        parser.add_argument(dest='profile_id')
         parser.add_argument('-m', '--machine-id')
         parser.add_argument('-f', '--firebase-id')
         parser.add_argument('-q', '--firebase-queue')
         parser.add_argument('-S', '--firebase-auth-secret')
         parser.add_argument('-g', '--docker-gid')
-        parser.set_defaults(func=init)
+        parser.add_argument('-t', '--verifier-tag')
+        parser.add_argument('-c', '--max-worker')
+        parser.set_defaults(
+            func=init,
+            machine_id=self.get(MACHINE_ID_KEY),
+            firebase_id=self.get(FB_ID_KEY),
+            firebase_queue=self.get(FB_QUEUE_KEY),
+            firebase_auth_secret=self.get(FB_SECRET_KEY),
+            docker_gid=self.get(DOCKER_GID_KEY),
+            max_worker=self.get(MAX_WORKER_KEY),
+            verifier_tag=self.get(VERIFIER_TAG_KEY),
+        )
 
-    @staticmethod
-    def start_parser(subparsers):
+    def start_parser(self, subparsers):
         parser = subparsers.add_parser(
             'start',
             help='start verifier',
@@ -212,8 +213,18 @@ class Settings(object):
         parser.add_argument('-q', '--firebase-queue')
         parser.add_argument('-S', '--firebase-auth-secret')
         parser.add_argument('-g', '--docker-gid')
+        parser.add_argument('-t', '--verifier-tag')
+        parser.add_argument('-c', '--max-worker')
         parser.add_argument('-i', '--interactive', action='store_true')
-        parser.set_defaults(func=start)
+        parser.set_defaults(
+            func=start,
+            firebase_id=self.get(FB_ID_KEY),
+            firebase_queue=self.get(FB_QUEUE_KEY),
+            firebase_auth_secret=self.get(FB_SECRET_KEY),
+            docker_gid=self.get(DOCKER_GID_KEY),
+            max_worker=self.get(MAX_WORKER_KEY),
+            verifier_tag=self.get(VERIFIER_TAG_KEY),
+        )
 
     @staticmethod
     def stop_parser(subparsers):
@@ -229,8 +240,7 @@ class Settings(object):
         parser.add_argument('-p', '--profile-id')
         parser.set_defaults(func=stop)
 
-    @staticmethod
-    def push_parser(subparsers):
+    def push_parser(self, subparsers):
         parser = subparsers.add_parser(
             'push',
             help='push task(s)',
@@ -240,15 +250,22 @@ class Settings(object):
         parser.add_argument('-f', '--firebase-id')
         parser.add_argument('-q', '--firebase-queue')
         parser.add_argument('-S', '--firebase-auth-secret')
+        parser.add_argument('-t', '--verifier-tag')
         parser.add_argument(
             'payload',
             help='Payload(s), json or yaml encoded, to send the queue'
         )
-        parser.set_defaults(func=push)
+        parser.set_defaults(
+            func=push,
+            firebase_id=self.get(FB_ID_KEY),
+            firebase_queue=self.get(FB_QUEUE_KEY),
+            firebase_auth_secret=self.get(FB_SECRET_KEY),
+            verifier_tag=self.get(VERIFIER_TAG_KEY),
+        )
 
 
 def pull(opts):
-    image = 'singpath/verifier2:%s' % opts.tag
+    image = 'singpath/verifier2:%s' % opts.verifier_tag
     cmd = ['docker', 'pull', image]
 
     logging.info('Pulling the verifier daemon docker image (%s)', image)
@@ -290,8 +307,10 @@ def start(opts):
         '--group-add', str(opts.docker_gid),
         '-e', 'SINGPATH_FIREBASE_SECRET=%s' % opts.firebase_auth_secret,
         '-e', 'SINGPATH_FIREBASE_QUEUE=%s' % queue_url,
+        '-e', 'SINGPATH_FIREBASE_MAX_WORKER=%s' % opts.max_worker,
+        '-e', 'SINGPATH_IMAGE_TAG=%s' % opts.verifier_tag,
         '-e', 'SKIP_BUILD=0',
-        'singpath/verifier2', '/app/bin/verifier'
+        'singpath/verifier2'
     ]
 
     if opts.debug:
@@ -364,6 +383,7 @@ def push(opts):
         'docker', 'run', '--rm', '--name', container_name,
         '-e', 'SINGPATH_FIREBASE_SECRET=%s' % opts.firebase_auth_secret,
         '-e', 'SINGPATH_FIREBASE_QUEUE=%s' % queue_url,
+        '-e', 'SINGPATH_IMAGE_TAG=%s' % opts.verifier_tag,
         '-e', 'SKIP_BUILD=0',
         'singpath/verifier2', '/app/bin/verifier', 'push', opts.payload
     ]
@@ -407,7 +427,11 @@ def ask_settings(opts):
 
     settings[MACHINE_ID_KEY] = prompt('\nMachine ID', opts.machine_id)
     settings[FB_ID_KEY] = prompt('\nFirebase ID', opts.firebase_id)
-    settings[FB_QUEUE_KEY] = prompt('\nFirebase ID', opts.firebase_queue)
+    settings[FB_QUEUE_KEY] = prompt(
+        '\nFirebase queue name', opts.firebase_queue
+    )
+    settings[MAX_WORKER_KEY] = prompt('\nMax worker', opts.max_worker)
+    settings[VERIFIER_TAG_KEY] = prompt('\nVerifier tag', opts.verifier_tag)
     settings[FB_SECRET_KEY] = prompt_secret(settings[FB_ID_KEY], opts)
 
     return settings

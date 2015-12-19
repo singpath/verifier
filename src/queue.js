@@ -286,6 +286,7 @@ module.exports = class Queue extends events.EventEmitter {
 
     if (lastTry) {
       this.logger.info('Already failed to run task. Skipping it (%s).', key);
+      return;
     }
 
     this.tasksToRun.push({key, data});

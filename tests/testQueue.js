@@ -707,7 +707,6 @@ describe('queue', () => {
     });
 
     it('should skip task with worker already tried to run it before', () => {
-      data.payload.language = 'dinolang';
       data.tries.someWorker = 12345;
 
       queue.sheduleTask(key, data);

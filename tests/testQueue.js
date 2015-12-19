@@ -9,10 +9,11 @@ const verifierComponent = require('../src/verifier');
 
 
 describe('queue', () => {
-  let queue, singpathRef, tasksRef, someTaskRef, rootRef, dockerClient;
+  let firebaseClient, queue, dockerClient;
+  let workersRef, singpathRef, tasksRef, someTaskRef, rootRef;
 
   beforeEach(() => {
-    const workersRef = {};
+    workersRef = {};
     const logger = {
       info: sinon.stub(),
       error: sinon.stub(),
@@ -32,11 +33,12 @@ describe('queue', () => {
     };
 
     tasksRef = {
-      child: sinon.stub().returns(someTaskRef)
+      child: sinon.stub().returns(someTaskRef),
+      push: sinon.stub()
     };
     tasksRef.path = ['singpath', 'queues', 'default', 'tasks'];
 
-    const firebaseClient = {
+    firebaseClient = {
       key: sinon.stub().returns('default'),
       root: sinon.stub().returns(rootRef),
       child: sinon.stub(),
@@ -58,12 +60,73 @@ describe('queue', () => {
     };
   });
 
+  it('should set max worker to default value', () => {
+    expect(
+      verifier.singpathQueue(firebaseClient, dockerClient).opts.maxWorker
+    ).to.be(2);
+  });
+
+  it('should set max worker to the provided option value', () => {
+    const maxWorker = 5;
+
+    expect(
+      verifier.singpathQueue(firebaseClient, dockerClient, {maxWorker}).opts.maxWorker
+    ).to.be(maxWorker);
+  });
+
+  it('should set max worker to 1+', () => {
+    const maxWorker = -1;
+
+    expect(
+      verifier.singpathQueue(firebaseClient, dockerClient, {maxWorker}).opts.maxWorker
+    ).to.be(1);
+  });
+
   it('should set singpathRef property', () => {
     expect(queue.singpathRef).to.be(singpathRef);
   });
 
   it('should set taskRef property', () => {
     expect(queue.tasksRef).to.be(tasksRef);
+  });
+
+  it('should monitor authentication', () => {
+    sinon.assert.calledOnce(firebaseClient.onAuth);
+    sinon.assert.calledWithExactly(firebaseClient.onAuth, sinon.match.func);
+
+    const data = {uid: 'someone'};
+    const cb = firebaseClient.onAuth.lastCall.args[0];
+
+    cb(data);
+    expect(queue.authData).to.be(data);
+  });
+
+  it('should emit a loggedIn event if authData are set', done => {
+    const data = {uid: 'someone'};
+    const cb = firebaseClient.onAuth.lastCall.args[0];
+
+    queue.on('loggedIn', authData => {
+      expect(authData).to.be(data);
+      done();
+    });
+
+    cb(data);
+  });
+
+  it('should emit a loggedOut event if authData are not set', done => {
+    const data = undefined;
+    const cb = firebaseClient.onAuth.lastCall.args[0];
+
+    queue.on('loggedOut', authData => {
+      expect(authData).to.be(undefined);
+      done();
+    });
+
+    cb(data);
+  });
+
+  it('should set workersRef attribute', () => {
+    expect(queue.workersRef).to.be(workersRef);
   });
 
   describe('isWorker', () => {
@@ -90,6 +153,270 @@ describe('queue', () => {
 
     it('should return true if the user is a worker for the correct queue', () => {
       expect(queue.isWorker()).to.be(true);
+    });
+
+  });
+
+  describe('auth', () => {
+    let authData;
+
+    beforeEach(() => {
+      authData = {};
+      queue.ref.authWithCustomToken = sinon.stub().yields(null, authData);
+    });
+
+    it('should authentication user', () => {
+      return queue.auth('some-token').then(data => {
+        expect(data).to.be(authData);
+        expect(queue.authData).to.be(data);
+      });
+    });
+
+    it('should authentication user using a token', () => {
+      return queue.auth('some-token').then(() => {
+        sinon.assert.calledWithExactly(
+          queue.ref.authWithCustomToken,
+          'some-token',
+          sinon.match.func
+        );
+      });
+    });
+
+    it('should reject if authentication failed', () => {
+      const err = new Error();
+
+      queue.ref.authWithCustomToken.yields(err, null);
+
+      return queue.auth('some-token').then(
+        () => Promise.reject(new Error('unexpected')),
+        () => undefined
+      );
+    });
+
+  });
+
+  describe('pushToQueue', () => {
+    let payload, newTaskRef;
+
+    beforeEach(() => {
+      queue.authData = {
+        uid: 'someUser',
+        authData: {
+          isUser: true
+        }
+      };
+
+      payload = {};
+
+      newTaskRef = { set: sinon.stub().yields(null) };
+      queue.tasksRef.push.returns(newTaskRef);
+    });
+
+    it('should push a task to the task queue', () => {
+      return queue.pushToQueue(payload).then(() => {
+        sinon.assert.calledOnce(queue.tasksRef.push);
+        sinon.assert.calledOnce(newTaskRef.set);
+        sinon.assert.calledWithExactly(
+          newTaskRef.set,
+          sinon.match(data => {
+            return (
+              Object.keys(data).length === 6 &&
+              sinon.match({
+                owner: 'someUser',
+                payload: payload,
+                started: false,
+                completed: false,
+                consumed: false,
+                createdAt: Firebase.ServerValue.TIMESTAMP
+              }, data)
+            );
+          }),
+          sinon.match.func
+        );
+      });
+    });
+
+    it('should reject if the user is not logged in', () => {
+      queue.authData = null;
+      return queue.pushToQueue(payload).then(
+        () => Promise.reject(new Error('Unexpected')),
+        () => undefined
+      );
+    });
+
+  });
+
+  describe('updatePresence', () => {
+    let workerRef, presenceRef;
+
+    beforeEach(() => {
+      presenceRef = { set: sinon.stub().yields(null) };
+      workerRef = { child: sinon.stub().withArgs('presence').returns(presenceRef) };
+      queue.workersRef.child = sinon.stub().withArgs('someWorker').returns(workerRef);
+    });
+
+    it('should update the worker presence', () => {
+      return queue.updatePresence().then(() => {
+        sinon.assert.calledOnce(presenceRef.set);
+        sinon.assert.calledWithExactly(
+          presenceRef.set, Firebase.ServerValue.TIMESTAMP, sinon.match.func
+        );
+      });
+    });
+
+    it('should reject if the user is not logged in', () => {
+      queue.authData = undefined;
+
+      return queue.updatePresence().then(
+        () => Promise.reject(new Error('unexpected')),
+        () => undefined
+      );
+    });
+
+    it('should reject if the user is not a worker', () => {
+      queue.authData.auth.isWorker = false;
+
+      return queue.updatePresence().then(
+        () => Promise.reject(new Error('unexpected')),
+        () => undefined
+      );
+    });
+
+    it('should reject if the presence update failed', () => {
+      const err = new Error('Some permission error');
+
+      presenceRef.set.yields(err);
+
+      return queue.updatePresence().then(
+        () => Promise.reject(new Error('unexpected')),
+        e => expect(e).to.be(err)
+      );
+    });
+
+  });
+
+  describe('watch', () => {
+    let deregister, stopWatchOnWorker, stopWatchAddedTask, stopWatchOnUpdatedTask;
+
+    beforeEach(() => {
+      deregister = sinon.stub();
+      stopWatchOnWorker = sinon.stub();
+      stopWatchAddedTask = sinon.stub();
+      stopWatchOnUpdatedTask = sinon.stub();
+
+      sinon.stub(queue, 'registerWorker').returns(Promise.resolve(deregister));
+      sinon.stub(queue, 'monitorWorkers').returns(stopWatchOnWorker);
+      sinon.stub(queue, 'monitorAddedTask').returns(stopWatchAddedTask);
+      sinon.stub(queue, 'monitorUpdatedTask').returns(stopWatchOnUpdatedTask);
+    });
+
+    it('should register the worker', () => {
+      return queue.watch().then(() => {
+        sinon.assert.calledOnce(queue.registerWorker);
+      });
+    });
+
+    it('should start monitoring workers presence', () => {
+      return queue.watch().then(() => {
+        sinon.assert.calledOnce(queue.monitorWorkers);
+        sinon.assert.calledWithExactly(queue.monitorWorkers, sinon.match.func);
+      });
+    });
+
+    it('should start monitoring added task', () => {
+      return queue.watch().then(() => {
+        sinon.assert.calledOnce(queue.monitorAddedTask);
+        sinon.assert.calledWithExactly(queue.monitorAddedTask, sinon.match.func);
+      });
+    });
+
+    it('should start monitoring updated task', () => {
+      return queue.watch().then(() => {
+        sinon.assert.calledOnce(queue.monitorUpdatedTask);
+        sinon.assert.calledWithExactly(queue.monitorUpdatedTask, sinon.match.func);
+      });
+    });
+
+    it('should let the watch be cancelled', () => {
+      return queue.watch().then(cancel => {
+        expect(cancel).to.be.an(Function);
+
+        return cancel();
+      }).then(() => {
+        sinon.assert.calledOnce(deregister);
+        sinon.assert.calledOnce(stopWatchOnWorker);
+        sinon.assert.calledOnce(stopWatchAddedTask);
+        sinon.assert.calledOnce(stopWatchOnUpdatedTask);
+      });
+    });
+
+    it('should cancel the watch if one of the watch fails', () => {
+      return queue.watch().then(() => {
+        const failureCb = queue.monitorWorkers.lastCall.args[0];
+
+        failureCb(new Error());
+
+        sinon.assert.calledOnce(deregister);
+        sinon.assert.calledOnce(stopWatchOnWorker);
+        sinon.assert.calledOnce(stopWatchAddedTask);
+        sinon.assert.calledOnce(stopWatchOnUpdatedTask);
+      });
+    });
+
+    it('should cancel the watch once even if many of the watches fails', done => {
+      // will fail if called more than once
+      queue.on('watchStopped', () => done());
+
+      queue.watch().then(() => {
+        [queue.monitorWorkers, queue.monitorAddedTask, queue.monitorUpdatedTask].forEach(
+          watcher => {
+            const failureCb = watcher.lastCall.args[0];
+            failureCb(new Error());
+          }
+        );
+      });
+    });
+
+    describe('cancel handler', () => {
+
+      it('should reject if cancellation failed', () => {
+        deregister.returns(Promise.reject(new Error('failed to deregister')));
+
+        return queue.watch().then(cancel => {
+          return cancel();
+        }).then(
+          () => Promise.reject(new Error('unexpected')),
+          () => undefined
+        );
+      });
+
+      it('should cancel all watch even one cancellation fails', () => {
+        deregister.returns(Promise.reject(new Error('failed to deregister')));
+        stopWatchOnWorker.throws(new Error('falied to stop watch'));
+        stopWatchAddedTask.throws(new Error('falied to stop watch'));
+        stopWatchOnUpdatedTask.throws(new Error('falied to stop watch'));
+
+        return queue.watch().then(cancel => {
+          return cancel();
+        }).then(
+          () => Promise.reject(new Error('unexpected')),
+          () => {
+            sinon.assert.calledOnce(deregister);
+            sinon.assert.calledOnce(stopWatchOnWorker);
+            sinon.assert.calledOnce(stopWatchAddedTask);
+            sinon.assert.calledOnce(stopWatchOnUpdatedTask);
+          }
+        );
+      });
+
+      it('should fire a watchStopped event', done => {
+        queue.on('watchStopped', () => done());
+
+        queue.watch().then(cancel => {
+          return cancel();
+        });
+      });
+
     });
 
   });
@@ -380,7 +707,6 @@ describe('queue', () => {
     });
 
     it('should skip task with worker already tried to run it before', () => {
-      data.payload.language = 'dinolang';
       data.tries.someWorker = 12345;
 
       queue.sheduleTask(key, data);

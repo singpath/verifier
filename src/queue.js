@@ -11,7 +11,7 @@ const FIFO = require('./fifo').FIFO;
 const verifier = require('./verifier');
 const events = require('events');
 
-const DEFAULT_MAX_WORKER = 10;
+const DEFAULT_MAX_WORKER = 2;
 
 // TODO: should be saved in FB db and shared between verifiers.
 const DEFAULT_PRESENCE_DELAY = 30000;
@@ -42,7 +42,7 @@ module.exports = class Queue extends events.EventEmitter {
     this.queueName = this.ref.key();
     this.singpathRef = this.ref.root().child('singpath');
     this.tasksRef = this.ref.child('tasks');
-    this.workerRef = this.ref.child('workers');
+    this.workersRef = this.ref.child('workers');
 
     this.tasksToRun = new FIFO();
     this.taskRunning = 0;
@@ -51,7 +51,7 @@ module.exports = class Queue extends events.EventEmitter {
     this.ref.onAuth(authData => {
       this.authData = authData;
 
-      if (authData && authData) {
+      if (authData && authData.uid) {
         this.emit('loggedIn', authData);
       } else {
         this.emit('loggedOut', authData);
@@ -113,7 +113,8 @@ module.exports = class Queue extends events.EventEmitter {
       completed: false,
       consumed: false,
       owner: this.authData.uid,
-      payload: payload
+      payload: payload,
+      createdAt: Firebase.ServerValue.TIMESTAMP
     });
   }
 
@@ -129,7 +130,7 @@ module.exports = class Queue extends events.EventEmitter {
       return Promise.reject(new Error('The user is not logged in as a worker for this queue'));
     }
 
-    return promisedSet(this.workerRef.child(this.authData.uid), {
+    return promisedSet(this.workersRef.child(this.authData.uid), {
       startedAt: Firebase.ServerValue.TIMESTAMP,
       presence: Firebase.ServerValue.TIMESTAMP
     }).then(ref => {
@@ -172,7 +173,7 @@ module.exports = class Queue extends events.EventEmitter {
     }
 
     return promisedSet(
-      this.workerRef.child(this.authData.uid).child('presence'),
+      this.workersRef.child(this.authData.uid).child('presence'),
       Firebase.ServerValue.TIMESTAMP
     ).then(
       () => this.logger.info('Worker presence updated')
@@ -183,12 +184,17 @@ module.exports = class Queue extends events.EventEmitter {
   }
 
   /**
-   * Start watching the task queue and running opened tasks and any new task
-   * added later.
+   * Start watching the task queue and workers' presence.
    *
-   * Returns a promise resolving when the worker is registered. It will resolve
-   * to a fn that will stop the watch when called. Note that you do not it to
-   * call it the auth token expire.
+   * Any opened task or opened task added or updated later, should be sheduled
+   * to be verified.
+   *
+   * Any worker craching should be removed from the workers list.
+   *
+   * Returns a promise resolving when the worker is registered and the watch
+   * starts. It will resolve to a fn that will stop the watch when called.
+   *
+   * Note that you do need not it to call it the auth token expire.
    *
    * It will reject if the worker couldn't register itself.
    *
@@ -202,17 +208,16 @@ module.exports = class Queue extends events.EventEmitter {
       let cancel = noop;
 
       const failureHandler = once(err => {
-        this.emit('watchStopped', err);
         this.logger.error('Watch on new task failed unexpectively: %s', err.toString());
-        cancel();
+        cancel(err);
       });
 
       const stopWorkerWatch = this.monitorWorkers(failureHandler);
       const stopAddedTaskWatch = this.monitorAddedTask(failureHandler);
       const stopUpdatedTaskWatch = this.monitorUpdatedTask(failureHandler);
 
-      cancel = () => {
-        this.emit('watchStopped');
+      cancel = (err) => {
+        this.emit('watchStopped', err);
         this.logger.info('Watch on new task stopped.');
 
         return Promise.all([
@@ -281,6 +286,7 @@ module.exports = class Queue extends events.EventEmitter {
 
     if (lastTry) {
       this.logger.info('Already failed to run task. Skipping it (%s).', key);
+      return;
     }
 
     this.tasksToRun.push({key, data});
@@ -543,7 +549,7 @@ module.exports = class Queue extends events.EventEmitter {
     let cancelWorkerWatch = noop;
     let cancelTaskWatch = noop;
 
-    const presenceRef = this.workerRef.child(this.authData.uid).child('presence');
+    const presenceRef = this.workersRef.child(this.authData.uid).child('presence');
     const presenceHandler = presenceRef.on('value', debounce(snapshot => {
       const now = snapshot.val();
       this.logger.debug('Presence Time: %s', new Date(now));
@@ -566,7 +572,7 @@ module.exports = class Queue extends events.EventEmitter {
   removeWorker(olderThan) {
     this.logger.debug('Removing worker older than %s...', new Date(olderThan));
 
-    const query = this.workerRef.orderByChild('presence').endAt(olderThan).limitToFirst(1);
+    const query = this.workersRef.orderByChild('presence').endAt(olderThan).limitToFirst(1);
     const handler = query.on('child_added', snapshot => {
       const key = snapshot.key();
 

@@ -9,7 +9,7 @@ const verifierComponent = require('../src/verifier');
 
 
 describe('queue', () => {
-  let queue, singpathRef, tasksRef, someTaskRef, rootRef, dockerClient;
+  let firebaseClient, queue, singpathRef, tasksRef, someTaskRef, rootRef, dockerClient;
 
   beforeEach(() => {
     const workersRef = {};
@@ -32,11 +32,12 @@ describe('queue', () => {
     };
 
     tasksRef = {
-      child: sinon.stub().returns(someTaskRef)
+      child: sinon.stub().returns(someTaskRef),
+      push: sinon.stub()
     };
     tasksRef.path = ['singpath', 'queues', 'default', 'tasks'];
 
-    const firebaseClient = {
+    firebaseClient = {
       key: sinon.stub().returns('default'),
       root: sinon.stub().returns(rootRef),
       child: sinon.stub(),
@@ -64,6 +65,41 @@ describe('queue', () => {
 
   it('should set taskRef property', () => {
     expect(queue.tasksRef).to.be(tasksRef);
+  });
+
+  it('should monitor authentication', () => {
+    sinon.assert.calledOnce(firebaseClient.onAuth);
+    sinon.assert.calledWithExactly(firebaseClient.onAuth, sinon.match.func);
+
+    const data = {uid: 'someone'};
+    const cb = firebaseClient.onAuth.lastCall.args[0];
+
+    cb(data);
+    expect(queue.authData).to.be(data);
+  });
+
+  it('should emit a loggedIn event if authData are set', done => {
+    const data = {uid: 'someone'};
+    const cb = firebaseClient.onAuth.lastCall.args[0];
+
+    queue.on('loggedIn', authData => {
+      expect(authData).to.be(data);
+      done();
+    });
+
+    cb(data);
+  });
+
+  it('should emit a loggedOut event if authData are not set', done => {
+    const data = undefined;
+    const cb = firebaseClient.onAuth.lastCall.args[0];
+
+    queue.on('loggedOut', authData => {
+      expect(authData).to.be(undefined);
+      done();
+    });
+
+    cb(data);
   });
 
   describe('isWorker', () => {

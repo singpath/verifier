@@ -51,7 +51,7 @@ module.exports = class Queue extends events.EventEmitter {
     this.ref.onAuth(authData => {
       this.authData = authData;
 
-      if (authData && authData) {
+      if (authData && authData.uid) {
         this.emit('loggedIn', authData);
       } else {
         this.emit('loggedOut', authData);

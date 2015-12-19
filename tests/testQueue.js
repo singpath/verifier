@@ -295,6 +295,132 @@ describe('queue', () => {
 
   });
 
+  describe('watch', () => {
+    let deregister, stopWatchOnWorker, stopWatchAddedTask, stopWatchOnUpdatedTask;
+
+    beforeEach(() => {
+      deregister = sinon.stub();
+      stopWatchOnWorker = sinon.stub();
+      stopWatchAddedTask = sinon.stub();
+      stopWatchOnUpdatedTask = sinon.stub();
+
+      sinon.stub(queue, 'registerWorker').returns(Promise.resolve(deregister));
+      sinon.stub(queue, 'monitorWorkers').returns(stopWatchOnWorker);
+      sinon.stub(queue, 'monitorAddedTask').returns(stopWatchAddedTask);
+      sinon.stub(queue, 'monitorUpdatedTask').returns(stopWatchOnUpdatedTask);
+    });
+
+    it('should register the worker', () => {
+      return queue.watch().then(() => {
+        sinon.assert.calledOnce(queue.registerWorker);
+      });
+    });
+
+    it('should start monitoring workers presence', () => {
+      return queue.watch().then(() => {
+        sinon.assert.calledOnce(queue.monitorWorkers);
+        sinon.assert.calledWithExactly(queue.monitorWorkers, sinon.match.func);
+      });
+    });
+
+    it('should start monitoring added task', () => {
+      return queue.watch().then(() => {
+        sinon.assert.calledOnce(queue.monitorAddedTask);
+        sinon.assert.calledWithExactly(queue.monitorAddedTask, sinon.match.func);
+      });
+    });
+
+    it('should start monitoring updated task', () => {
+      return queue.watch().then(() => {
+        sinon.assert.calledOnce(queue.monitorUpdatedTask);
+        sinon.assert.calledWithExactly(queue.monitorUpdatedTask, sinon.match.func);
+      });
+    });
+
+    it('should let the watch be cancelled', () => {
+      return queue.watch().then(cancel => {
+        expect(cancel).to.be.an(Function);
+
+        return cancel();
+      }).then(() => {
+        sinon.assert.calledOnce(deregister);
+        sinon.assert.calledOnce(stopWatchOnWorker);
+        sinon.assert.calledOnce(stopWatchAddedTask);
+        sinon.assert.calledOnce(stopWatchOnUpdatedTask);
+      });
+    });
+
+    it('should cancel the watch if one of the watch fails', () => {
+      return queue.watch().then(() => {
+        const failureCb = queue.monitorWorkers.lastCall.args[0];
+
+        failureCb(new Error());
+
+        sinon.assert.calledOnce(deregister);
+        sinon.assert.calledOnce(stopWatchOnWorker);
+        sinon.assert.calledOnce(stopWatchAddedTask);
+        sinon.assert.calledOnce(stopWatchOnUpdatedTask);
+      });
+    });
+
+    it('should cancel the watch once even if many of the watches fails', done => {
+      // will fail if called more than once
+      queue.on('watchStopped', () => done());
+
+      queue.watch().then(() => {
+        [queue.monitorWorkers, queue.monitorAddedTask, queue.monitorUpdatedTask].forEach(
+          watcher => {
+            const failureCb = watcher.lastCall.args[0];
+            failureCb(new Error());
+          }
+        );
+      });
+    });
+
+    describe('cancel handler', () => {
+
+      it('should reject if cancellation failed', () => {
+        deregister.returns(Promise.reject(new Error('failed to deregister')));
+
+        return queue.watch().then(cancel => {
+          return cancel();
+        }).then(
+          () => Promise.reject(new Error('unexpected')),
+          () => undefined
+        );
+      });
+
+      it('should cancel all watch even one cancellation fails', () => {
+        deregister.returns(Promise.reject(new Error('failed to deregister')));
+        stopWatchOnWorker.throws(new Error('falied to stop watch'));
+        stopWatchAddedTask.throws(new Error('falied to stop watch'));
+        stopWatchOnUpdatedTask.throws(new Error('falied to stop watch'));
+
+        return queue.watch().then(cancel => {
+          return cancel();
+        }).then(
+          () => Promise.reject(new Error('unexpected')),
+          () => {
+            sinon.assert.calledOnce(deregister);
+            sinon.assert.calledOnce(stopWatchOnWorker);
+            sinon.assert.calledOnce(stopWatchAddedTask);
+            sinon.assert.calledOnce(stopWatchOnUpdatedTask);
+          }
+        );
+      });
+
+      it('should fire a watchStopped event', done => {
+        queue.on('watchStopped', () => done());
+
+        queue.watch().then(cancel => {
+          return cancel();
+        });
+      });
+
+    });
+
+  });
+
   describe('solutionRelativePath', () => {
 
     ['', '/'].map(start => {

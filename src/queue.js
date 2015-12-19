@@ -184,12 +184,17 @@ module.exports = class Queue extends events.EventEmitter {
   }
 
   /**
-   * Start watching the task queue and running opened tasks and any new task
-   * added later.
+   * Start watching the task queue and workers' presence.
    *
-   * Returns a promise resolving when the worker is registered. It will resolve
-   * to a fn that will stop the watch when called. Note that you do not it to
-   * call it the auth token expire.
+   * Any opened task or opened task added or updated later, should be sheduled
+   * to be verified.
+   *
+   * Any worker craching should be removed from the workers list.
+   *
+   * Returns a promise resolving when the worker is registered and the watch
+   * starts. It will resolve to a fn that will stop the watch when called.
+   *
+   * Note that you do need not it to call it the auth token expire.
    *
    * It will reject if the worker couldn't register itself.
    *
@@ -203,17 +208,16 @@ module.exports = class Queue extends events.EventEmitter {
       let cancel = noop;
 
       const failureHandler = once(err => {
-        this.emit('watchStopped', err);
         this.logger.error('Watch on new task failed unexpectively: %s', err.toString());
-        cancel();
+        cancel(err);
       });
 
       const stopWorkerWatch = this.monitorWorkers(failureHandler);
       const stopAddedTaskWatch = this.monitorAddedTask(failureHandler);
       const stopUpdatedTaskWatch = this.monitorUpdatedTask(failureHandler);
 
-      cancel = () => {
-        this.emit('watchStopped');
+      cancel = (err) => {
+        this.emit('watchStopped', err);
         this.logger.info('Watch on new task stopped.');
 
         return Promise.all([

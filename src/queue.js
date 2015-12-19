@@ -266,11 +266,21 @@ module.exports = class Queue extends events.EventEmitter {
    * @param  {Object} data Task body
    */
   sheduleTask(key, data) {
+    if (!this.isWorker()) {
+      return Promise.reject(new Error('The user is not logged in as a worker for this queue'));
+    }
+
     const language = data && data.payload && data.payload.language;
 
     if (!verifier.support(language)) {
       this.logger.info('Task ("%s") language ("%s") is not supported', key, language);
       return;
+    }
+
+    const lastTry = data && data.tries && data.tries[this.authData.uid];
+
+    if (lastTry) {
+      this.logger.info('Already failed to run task. Skipping it (%s).', key);
     }
 
     this.tasksToRun.push({key, data});
@@ -365,11 +375,17 @@ module.exports = class Queue extends events.EventEmitter {
       return Promise.reject(new Error('The user is not logged in as a worker for this queue'));
     }
 
-    return promisedUpdate(this.tasksRef.child(task.key), {
+    const data = {
       worker: null,
       started: false,
       startedAt: null
-    }).then(
+    };
+
+    if (task.data && task.data.worker) {
+      data[`tries/${task.data.worker}`] = Firebase.ServerValue.TIMESTAMP;
+    }
+
+    return promisedUpdate(this.tasksRef.child(task.key), data).then(
       () => this.logger.info('Task ("%s") claim removed.', task.key)
     ).catch(err => {
       this.logger.error('Failed to remove task claim("%s"): %s', task.key, err.toString());

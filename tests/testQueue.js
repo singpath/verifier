@@ -48,6 +48,14 @@ describe('queue', () => {
 
     dockerClient = {};
     queue = verifier.singpathQueue(firebaseClient, dockerClient, {logger});
+    queue.authData = {
+      uid: 'someWorker',
+      auth: {
+        uid: 'someWorker',
+        isWorker: 'true',
+        queue: 'default'
+      }
+    };
   });
 
   it('should set singpathRef property', () => {
@@ -324,35 +332,121 @@ describe('queue', () => {
   });
 
   describe('sheduleTask', () => {
+    let key, data;
 
     beforeEach(() => {
       sinon.stub(queue.tasksToRun, 'push');
       sinon.stub(queue.tasksToRun, 'shift');
       sinon.stub(queue, 'runTask');
-    });
 
-    it('should skip task with unsupported language', () => {
-      const task = {
-        payload: {
-          language: 'dinolang'
-        }
-      };
-
-      queue.sheduleTask('someTaskId', task);
-      sinon.assert.notCalled(queue.tasksToRun.push);
-    });
-
-    it('should shedule task if the language is supported', () => {
-      const key = 'someTaskId';
-      const data = {
+      key = 'someTaskId';
+      data = {
         payload: {
           language: 'java'
-        }
+        },
+        tries: {}
       };
+    });
 
+    it('should shedule task', () => {
       queue.sheduleTask(key, data);
       sinon.assert.calledOnce(queue.tasksToRun.push);
       sinon.assert.calledWithExactly(queue.tasksToRun.push, {key, data});
+    });
+
+    it('should skip task if the worker is not authenticated', () => {
+      queue.authData.uid = undefined;
+      queue.sheduleTask(key, data);
+      sinon.assert.notCalled(queue.tasksToRun.push);
+    });
+
+    it('should skip task if the worker is not a worker', () => {
+      queue.authData.auth.isWorker = undefined;
+      queue.sheduleTask(key, data);
+      sinon.assert.notCalled(queue.tasksToRun.push);
+    });
+
+    it('should skip task if the worker is not a worker for the correct queue', () => {
+      queue.authData.auth.queue = 'foo';
+      queue.sheduleTask(key, data);
+      sinon.assert.notCalled(queue.tasksToRun.push);
+    });
+
+    it('should skip task with unsupported language', () => {
+      data.payload.language = 'dinolang';
+
+      queue.sheduleTask(key, data);
+      sinon.assert.notCalled(queue.tasksToRun.push);
+    });
+
+    it('should skip task with worker already tried to run it before', () => {
+      data.payload.language = 'dinolang';
+      data.tries.someWorker = 12345;
+
+      queue.sheduleTask(key, data);
+      sinon.assert.notCalled(queue.tasksToRun.push);
+    });
+
+  });
+
+  describe('removeTaskClaim', () => {
+    let task;
+
+    beforeEach(() => {
+      task = {
+        key: 'someTaskId',
+        data: {
+          worker: 'someWorker'
+        }
+      };
+    });
+
+    it('should remove claim', () => {
+      return queue.removeTaskClaim(task).then(() => {
+        sinon.assert.calledOnce(queue.tasksRef.child);
+        sinon.assert.calledWithExactly(queue.tasksRef.child, 'someTaskId');
+
+        sinon.assert.calledOnce(someTaskRef.update);
+        sinon.assert.calledWithExactly(
+          someTaskRef.update,
+          sinon.match(data => {
+            return (
+              Object.keys(data).length === 4 &&
+              data.started === false &&
+              data.startedAt === null &&
+              data.worker === null &&
+              data['tries/someWorker'] === Firebase.ServerValue.TIMESTAMP
+            );
+          }),
+          sinon.match.func
+        );
+      });
+    });
+
+    it('should reject if the worker is not logged on', () => {
+      queue.authData = null;
+
+      return queue.removeTaskClaim(task).then(
+        () => Promise.reject(new Error('unexpected')),
+        () => undefined
+      );
+    });
+
+    it('should not record update tries property if task data are missing', () => {
+      task.data = null;
+
+      return queue.removeTaskClaim(task).then(() => {
+        sinon.assert.calledWithExactly(
+          someTaskRef.update,
+          sinon.match(data => {
+            return (
+              Object.keys(data).length === 3 &&
+              data['tries/someWorker'] == null
+            );
+          }),
+          sinon.match.func
+        );
+      });
     });
 
   });

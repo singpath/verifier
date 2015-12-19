@@ -42,7 +42,7 @@ module.exports = class Queue extends events.EventEmitter {
     this.queueName = this.ref.key();
     this.singpathRef = this.ref.root().child('singpath');
     this.tasksRef = this.ref.child('tasks');
-    this.workerRef = this.ref.child('workers');
+    this.workersRef = this.ref.child('workers');
 
     this.tasksToRun = new FIFO();
     this.taskRunning = 0;
@@ -130,7 +130,7 @@ module.exports = class Queue extends events.EventEmitter {
       return Promise.reject(new Error('The user is not logged in as a worker for this queue'));
     }
 
-    return promisedSet(this.workerRef.child(this.authData.uid), {
+    return promisedSet(this.workersRef.child(this.authData.uid), {
       startedAt: Firebase.ServerValue.TIMESTAMP,
       presence: Firebase.ServerValue.TIMESTAMP
     }).then(ref => {
@@ -173,7 +173,7 @@ module.exports = class Queue extends events.EventEmitter {
     }
 
     return promisedSet(
-      this.workerRef.child(this.authData.uid).child('presence'),
+      this.workersRef.child(this.authData.uid).child('presence'),
       Firebase.ServerValue.TIMESTAMP
     ).then(
       () => this.logger.info('Worker presence updated')
@@ -544,7 +544,7 @@ module.exports = class Queue extends events.EventEmitter {
     let cancelWorkerWatch = noop;
     let cancelTaskWatch = noop;
 
-    const presenceRef = this.workerRef.child(this.authData.uid).child('presence');
+    const presenceRef = this.workersRef.child(this.authData.uid).child('presence');
     const presenceHandler = presenceRef.on('value', debounce(snapshot => {
       const now = snapshot.val();
       this.logger.debug('Presence Time: %s', new Date(now));
@@ -567,7 +567,7 @@ module.exports = class Queue extends events.EventEmitter {
   removeWorker(olderThan) {
     this.logger.debug('Removing worker older than %s...', new Date(olderThan));
 
-    const query = this.workerRef.orderByChild('presence').endAt(olderThan).limitToFirst(1);
+    const query = this.workersRef.orderByChild('presence').endAt(olderThan).limitToFirst(1);
     const handler = query.on('child_added', snapshot => {
       const key = snapshot.key();
 

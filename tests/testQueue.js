@@ -9,10 +9,11 @@ const verifierComponent = require('../src/verifier');
 
 
 describe('queue', () => {
-  let firebaseClient, queue, singpathRef, tasksRef, someTaskRef, rootRef, dockerClient;
+  let firebaseClient, queue, dockerClient;
+  let workersRef, singpathRef, tasksRef, someTaskRef, rootRef;
 
   beforeEach(() => {
-    const workersRef = {};
+    workersRef = {};
     const logger = {
       info: sinon.stub(),
       error: sinon.stub(),
@@ -122,6 +123,10 @@ describe('queue', () => {
     });
 
     cb(data);
+  });
+
+  it('should set workersRef attribute', () => {
+    expect(queue.workersRef).to.be(workersRef);
   });
 
   describe('isWorker', () => {
@@ -239,6 +244,54 @@ describe('queue', () => {
       );
     });
 
+  });
+
+  describe('updatePresence', () => {
+    let workerRef, presenceRef;
+
+    beforeEach(() => {
+      presenceRef = { set: sinon.stub().yields(null) };
+      workerRef = { child: sinon.stub().withArgs('presence').returns(presenceRef) };
+      queue.workersRef.child = sinon.stub().withArgs('someWorker').returns(workerRef);
+    });
+
+    it('should update the worker presence', () => {
+      return queue.updatePresence().then(() => {
+        sinon.assert.calledOnce(presenceRef.set);
+        sinon.assert.calledWithExactly(
+          presenceRef.set, Firebase.ServerValue.TIMESTAMP, sinon.match.func
+        );
+      });
+    });
+
+    it('should reject if the user is not logged in', () => {
+      queue.authData = undefined;
+
+      return queue.updatePresence().then(
+        () => Promise.reject(new Error('unexpected')),
+        () => undefined
+      );
+    });
+
+    it('should reject if the user is not a worker', () => {
+      queue.authData.auth.isWorker = false;
+
+      return queue.updatePresence().then(
+        () => Promise.reject(new Error('unexpected')),
+        () => undefined
+      );
+    });
+
+    it('should reject if the presence update failed', () => {
+      const err = new Error('Some permission error');
+
+      presenceRef.set.yields(err);
+
+      return queue.updatePresence().then(
+        () => Promise.reject(new Error('unexpected')),
+        e => expect(e).to.be(err)
+      );
+    });
 
   });
 

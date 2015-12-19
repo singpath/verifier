@@ -11,7 +11,7 @@ const FIFO = require('./fifo').FIFO;
 const verifier = require('./verifier');
 const events = require('events');
 
-const DEFAULT_MAX_WORKER = 10;
+const DEFAULT_MAX_WORKER = 2;
 
 // TODO: should be saved in FB db and shared between verifiers.
 const DEFAULT_PRESENCE_DELAY = 30000;

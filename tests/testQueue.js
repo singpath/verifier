@@ -59,6 +59,28 @@ describe('queue', () => {
     };
   });
 
+  it('should set max worker to default value', () => {
+    expect(
+      verifier.singpathQueue(firebaseClient, dockerClient).opts.maxWorker
+    ).to.be(2);
+  });
+
+  it('should set max worker to the provided option value', () => {
+    const maxWorker = 5;
+
+    expect(
+      verifier.singpathQueue(firebaseClient, dockerClient, {maxWorker}).opts.maxWorker
+    ).to.be(maxWorker);
+  });
+
+  it('should set max worker to 1+', () => {
+    const maxWorker = -1;
+
+    expect(
+      verifier.singpathQueue(firebaseClient, dockerClient, {maxWorker}).opts.maxWorker
+    ).to.be(1);
+  });
+
   it('should set singpathRef property', () => {
     expect(queue.singpathRef).to.be(singpathRef);
   });

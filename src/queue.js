@@ -113,7 +113,8 @@ module.exports = class Queue extends events.EventEmitter {
       completed: false,
       consumed: false,
       owner: this.authData.uid,
-      payload: payload
+      payload: payload,
+      createdAt: Firebase.ServerValue.TIMESTAMP
     });
   }
 

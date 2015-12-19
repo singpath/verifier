@@ -152,6 +152,96 @@ describe('queue', () => {
 
   });
 
+  describe('auth', () => {
+    let authData;
+
+    beforeEach(() => {
+      authData = {};
+      queue.ref.authWithCustomToken = sinon.stub().yields(null, authData);
+    });
+
+    it('should authentication user', () => {
+      return queue.auth('some-token').then(data => {
+        expect(data).to.be(authData);
+        expect(queue.authData).to.be(data);
+      });
+    });
+
+    it('should authentication user using a token', () => {
+      return queue.auth('some-token').then(() => {
+        sinon.assert.calledWithExactly(
+          queue.ref.authWithCustomToken,
+          'some-token',
+          sinon.match.func
+        );
+      });
+    });
+
+    it('should reject if authentication failed', () => {
+      const err = new Error();
+
+      queue.ref.authWithCustomToken.yields(err, null);
+
+      return queue.auth('some-token').then(
+        () => Promise.reject(new Error('unexpected')),
+        () => undefined
+      );
+    });
+
+  });
+
+  describe('pushToQueue', () => {
+    let payload, newTaskRef;
+
+    beforeEach(() => {
+      queue.authData = {
+        uid: 'someUser',
+        authData: {
+          isUser: true
+        }
+      };
+
+      payload = {};
+
+      newTaskRef = { set: sinon.stub().yields(null) };
+      queue.tasksRef.push.returns(newTaskRef);
+    });
+
+    it('should push a task to the task queue', () => {
+      return queue.pushToQueue(payload).then(() => {
+        sinon.assert.calledOnce(queue.tasksRef.push);
+        sinon.assert.calledOnce(newTaskRef.set);
+        sinon.assert.calledWithExactly(
+          newTaskRef.set,
+          sinon.match(data => {
+            return (
+              Object.keys(data).length === 6 &&
+              sinon.match({
+                owner: 'someUser',
+                payload: payload,
+                started: false,
+                completed: false,
+                consumed: false,
+                createdAt: Firebase.ServerValue.TIMESTAMP
+              }, data)
+            );
+          }),
+          sinon.match.func
+        );
+      });
+    });
+
+    it('should reject if the user is not logged in', () => {
+      queue.authData = null;
+      return queue.pushToQueue(payload).then(
+        () => Promise.reject(new Error('Unexpected')),
+        () => undefined
+      );
+    });
+
+
+  });
+
   describe('solutionRelativePath', () => {
 
     ['', '/'].map(start => {

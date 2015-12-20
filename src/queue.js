@@ -213,15 +213,14 @@ module.exports = class Queue extends events.EventEmitter {
       });
 
       const stopWorkerWatch = this.monitorWorkers(failureHandler);
-      const stopAddedTaskWatch = this.monitorAddedTask(failureHandler);
-      const stopUpdatedTaskWatch = this.monitorUpdatedTask(failureHandler);
+      const stopPendingTaskWatch = this.monitorPendingTask(failureHandler);
 
       cancel = (err) => {
         this.emit('watchStopped', err);
         this.logger.info('Watch on new task stopped.');
 
         return Promise.all([
-          deregister, stopWorkerWatch, stopAddedTaskWatch, stopUpdatedTaskWatch
+          deregister, stopWorkerWatch, stopPendingTaskWatch
         ].map(fn => {
           try {
             return fn();
@@ -237,28 +236,30 @@ module.exports = class Queue extends events.EventEmitter {
     });
   }
 
-  monitorAddedTask(failHandler) {
+  /**
+   * Monitor task queue to shedule any (re)opened task.
+   *
+   * Any tasks pending in the queue, tasks added and task unclaimed later.
+   *
+   * @param  {Function} failHandler
+   * @return {Function}
+   */
+  monitorPendingTask(failHandler) {
     const query = this.tasksRef.orderByChild('started').equalTo(false);
-    const handler = query.on('child_added', snapshot => {
-      this.sheduleTask(snapshot.key(), snapshot.val());
-    }, failHandler);
+    const eventTypes = ['child_added', 'child_changed'];
+    const handler = snapshot => this.sheduleTask(snapshot.key(), snapshot.val());
 
-    return () => query.off('child_added', handler);
-  }
+    eventTypes.forEach(type => query.on(type, handler, failHandler));
 
-  monitorUpdatedTask(failHandler) {
-    const query = this.tasksRef.orderByChild('started').equalTo(false);
-    const handler = query.on('child_changed', snapshot => {
-      const val = snapshot.val();
-
-      if (val.started) {
-        return;
-      }
-
-      this.sheduleTask(snapshot.key(), val);
-    }, failHandler);
-
-    return () => query.off('child_added', handler);
+    return () => {
+      return eventTypes.map(type => {
+        try {
+          return query.off(type, handler);
+        } catch (e) {
+          this.logger.error(e.toString());
+        }
+      });
+    };
   }
 
   /**

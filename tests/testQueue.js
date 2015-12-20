@@ -296,18 +296,16 @@ describe('queue', () => {
   });
 
   describe('watch', () => {
-    let deregister, stopWatchOnWorker, stopWatchAddedTask, stopWatchOnUpdatedTask;
+    let deregister, stopWatchOnWorker, monitorPendingTask;
 
     beforeEach(() => {
       deregister = sinon.stub();
       stopWatchOnWorker = sinon.stub();
-      stopWatchAddedTask = sinon.stub();
-      stopWatchOnUpdatedTask = sinon.stub();
+      monitorPendingTask = sinon.stub();
 
       sinon.stub(queue, 'registerWorker').returns(Promise.resolve(deregister));
       sinon.stub(queue, 'monitorWorkers').returns(stopWatchOnWorker);
-      sinon.stub(queue, 'monitorAddedTask').returns(stopWatchAddedTask);
-      sinon.stub(queue, 'monitorUpdatedTask').returns(stopWatchOnUpdatedTask);
+      sinon.stub(queue, 'monitorPendingTask').returns(monitorPendingTask);
     });
 
     it('should register the worker', () => {
@@ -323,17 +321,10 @@ describe('queue', () => {
       });
     });
 
-    it('should start monitoring added task', () => {
+    it('should start monitoring opened task', () => {
       return queue.watch().then(() => {
-        sinon.assert.calledOnce(queue.monitorAddedTask);
-        sinon.assert.calledWithExactly(queue.monitorAddedTask, sinon.match.func);
-      });
-    });
-
-    it('should start monitoring updated task', () => {
-      return queue.watch().then(() => {
-        sinon.assert.calledOnce(queue.monitorUpdatedTask);
-        sinon.assert.calledWithExactly(queue.monitorUpdatedTask, sinon.match.func);
+        sinon.assert.calledOnce(queue.monitorPendingTask);
+        sinon.assert.calledWithExactly(queue.monitorPendingTask, sinon.match.func);
       });
     });
 
@@ -345,8 +336,7 @@ describe('queue', () => {
       }).then(() => {
         sinon.assert.calledOnce(deregister);
         sinon.assert.calledOnce(stopWatchOnWorker);
-        sinon.assert.calledOnce(stopWatchAddedTask);
-        sinon.assert.calledOnce(stopWatchOnUpdatedTask);
+        sinon.assert.calledOnce(monitorPendingTask);
       });
     });
 
@@ -358,8 +348,7 @@ describe('queue', () => {
 
         sinon.assert.calledOnce(deregister);
         sinon.assert.calledOnce(stopWatchOnWorker);
-        sinon.assert.calledOnce(stopWatchAddedTask);
-        sinon.assert.calledOnce(stopWatchOnUpdatedTask);
+        sinon.assert.calledOnce(monitorPendingTask);
       });
     });
 
@@ -368,7 +357,7 @@ describe('queue', () => {
       queue.on('watchStopped', () => done());
 
       queue.watch().then(() => {
-        [queue.monitorWorkers, queue.monitorAddedTask, queue.monitorUpdatedTask].forEach(
+        [queue.monitorWorkers, queue.monitorPendingTask].forEach(
           watcher => {
             const failureCb = watcher.lastCall.args[0];
             failureCb(new Error());
@@ -393,8 +382,7 @@ describe('queue', () => {
       it('should cancel all watch even one cancellation fails', () => {
         deregister.returns(Promise.reject(new Error('failed to deregister')));
         stopWatchOnWorker.throws(new Error('falied to stop watch'));
-        stopWatchAddedTask.throws(new Error('falied to stop watch'));
-        stopWatchOnUpdatedTask.throws(new Error('falied to stop watch'));
+        monitorPendingTask.throws(new Error('falied to stop watch'));
 
         return queue.watch().then(cancel => {
           return cancel();
@@ -403,8 +391,7 @@ describe('queue', () => {
           () => {
             sinon.assert.calledOnce(deregister);
             sinon.assert.calledOnce(stopWatchOnWorker);
-            sinon.assert.calledOnce(stopWatchAddedTask);
-            sinon.assert.calledOnce(stopWatchOnUpdatedTask);
+            sinon.assert.calledOnce(monitorPendingTask);
           }
         );
       });
@@ -491,7 +478,7 @@ describe('queue', () => {
 
   });
 
-  describe('monitorAddedTask', () => {
+  describe('monitorPendingTask', () => {
     let failureHandler, query;
 
     beforeEach(() => {
@@ -499,24 +486,27 @@ describe('queue', () => {
       query = {
         equalTo: sinon.stub().returnsThis(),
         on: sinon.stub().returnsArg(1),
-        off: sinon.spy()
+        off: sinon.stub()
       };
 
       queue.tasksRef.orderByChild = sinon.stub().returns(query);
     });
 
 
-    it('should watch for any new open task', () => {
-      queue.monitorAddedTask(failureHandler);
+    it('should watch for any task opening', () => {
+      queue.monitorPendingTask(failureHandler);
       sinon.assert.calledOnce(queue.tasksRef.orderByChild);
       sinon.assert.calledWithExactly(
         queue.tasksRef.orderByChild, 'started'
       );
       sinon.assert.calledOnce(query.equalTo);
       sinon.assert.calledWithExactly(query.equalTo, false);
-      sinon.assert.calledOnce(query.on);
+      sinon.assert.calledTwice(query.on);
       sinon.assert.calledWithExactly(
         query.on, 'child_added', sinon.match.func, sinon.match.func
+      );
+      sinon.assert.calledWithExactly(
+        query.on, 'child_changed', sinon.match.func, sinon.match.func
       );
     });
 
@@ -539,21 +529,36 @@ describe('queue', () => {
       };
       sinon.spy(queue, 'sheduleTask');
 
-      queue.monitorAddedTask(failureHandler);
+      queue.monitorPendingTask(failureHandler);
 
-      const addedValueCb = query.on.lastCall.args[1];
+      const addedValueCb = query.on.firstCall.args[1];
+      const updatedValueCb = query.on.lastCall.args[1];
       addedValueCb(snapshot);
-      addedValueCb(snapshot);
+      updatedValueCb(snapshot);
     });
 
     it('should let the watch be cancelled', () => {
-      const cancel = queue.monitorAddedTask(failureHandler);
+      const cancel = queue.monitorPendingTask(failureHandler);
       const addedValueCb = query.on.lastCall.args[1];
 
       cancel();
 
-      sinon.assert.calledOnce(query.off);
+      sinon.assert.calledTwice(query.off);
       sinon.assert.calledWithExactly(query.off, 'child_added', addedValueCb);
+      sinon.assert.calledWithExactly(query.off, 'child_changed', addedValueCb);
+    });
+
+    it('should let cancelled any watch even if one throws', () => {
+      const cancel = queue.monitorPendingTask(failureHandler);
+      const addedValueCb = query.on.firstCall.args[1];
+      const updatedValueCb = query.on.lastCall.args[1];
+
+      cancel();
+
+      query.off.throws();
+      sinon.assert.calledTwice(query.off);
+      sinon.assert.calledWithExactly(query.off, 'child_added', addedValueCb);
+      sinon.assert.calledWithExactly(query.off, 'child_changed', updatedValueCb);
     });
 
   });

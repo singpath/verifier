@@ -491,6 +491,73 @@ describe('queue', () => {
 
   });
 
+  describe('monitorAddedTask', () => {
+    let failureHandler, query;
+
+    beforeEach(() => {
+      failureHandler = sinon.stub();
+      query = {
+        equalTo: sinon.stub().returnsThis(),
+        on: sinon.stub().returnsArg(1),
+        off: sinon.spy()
+      };
+
+      queue.tasksRef.orderByChild = sinon.stub().returns(query);
+    });
+
+
+    it('should watch for any new open task', () => {
+      queue.monitorAddedTask(failureHandler);
+      sinon.assert.calledOnce(queue.tasksRef.orderByChild);
+      sinon.assert.calledWithExactly(
+        queue.tasksRef.orderByChild, 'started'
+      );
+      sinon.assert.calledOnce(query.equalTo);
+      sinon.assert.calledWithExactly(query.equalTo, false);
+      sinon.assert.calledOnce(query.on);
+      sinon.assert.calledWithExactly(
+        query.on, 'child_added', sinon.match.func, sinon.match.func
+      );
+    });
+
+    it('should shedule the opened task', done => {
+      const key = 'someTaskKey';
+      const data = {started: false};
+      const snapshot = {
+        key: () => key,
+        val: () => data
+      };
+      let expectedShedulesTask = 2;
+
+      queue.sheduleTask = (key, data) => {
+        expect(key).to.be(key);
+        expect(data).to.be(data);
+
+        if (--expectedShedulesTask === 0) {
+          done();
+        }
+      };
+      sinon.spy(queue, 'sheduleTask');
+
+      queue.monitorAddedTask(failureHandler);
+
+      const addedValueCb = query.on.lastCall.args[1];
+      addedValueCb(snapshot);
+      addedValueCb(snapshot);
+    });
+
+    it('should let the watch be cancelled', () => {
+      const cancel = queue.monitorAddedTask(failureHandler);
+      const addedValueCb = query.on.lastCall.args[1];
+
+      cancel();
+
+      sinon.assert.calledOnce(query.off);
+      sinon.assert.calledWithExactly(query.off, 'child_added', addedValueCb);
+    });
+
+  });
+
   describe('solutionRelativePath', () => {
 
     ['', '/'].map(start => {

@@ -421,6 +421,76 @@ describe('queue', () => {
 
   });
 
+  describe('monitorWorkers', () => {
+    let failCb, workerRef, presenceRef, debounce, presenceSnapshot;
+    let cancelRemoveWorkers;
+    let cancelRemoveTaskClaims;
+
+    beforeEach(() => {
+      failCb = sinon.spy();
+
+      presenceSnapshot = { val: sinon.stub().returns(12345000)};
+      presenceRef = {
+        on: sinon.stub(),
+        off: sinon.stub()
+      };
+      presenceRef.on.withArgs('value').yields(presenceSnapshot);
+      presenceRef.on.withArgs('value').returnsArg(1);
+      workerRef = { child: sinon.stub().withArgs('presence').returns(presenceRef) };
+      queue.workersRef.child = sinon.stub().withArgs('someWorker').returns(workerRef);
+
+
+      cancelRemoveWorkers = sinon.stub();
+      cancelRemoveTaskClaims = sinon.stub();
+      sinon.stub(queue, 'removeWorkers').returns(cancelRemoveWorkers);
+      sinon.stub(queue, 'removeTaskClaims').returns(cancelRemoveTaskClaims);
+
+      debounce = sinon.stub().returnsArg(0);
+
+      queue.opts = {
+        presenceDelay: 500,
+        taskTimeout: 1000
+      };
+    });
+
+    it('should remove old works each time the worker update its own presence', () => {
+      queue.monitorWorkers(failCb, {debounce});
+      sinon.assert.calledOnce(queue.removeWorkers);
+      sinon.assert.calledWithExactly(queue.removeWorkers, 12344000, failCb);
+    });
+
+    it('should remove old task claim each time the worker update its own presence', () => {
+      queue.monitorWorkers(failCb, {debounce});
+      sinon.assert.calledOnce(queue.removeTaskClaims);
+      sinon.assert.calledWithExactly(queue.removeTaskClaims, 12343000, failCb);
+    });
+
+    it('should let the watch be cancelled', () => {
+      const cancel = queue.monitorWorkers(failCb, {debounce});
+      const presenceUpdateCb = presenceRef.on.lastCall.args[1];
+
+      cancel();
+      sinon.assert.calledOnce(cancelRemoveWorkers);
+      sinon.assert.calledOnce(cancelRemoveTaskClaims);
+      sinon.assert.calledOnce(presenceRef.off);
+      sinon.assert.calledWithExactly(presenceRef.off, 'value', presenceUpdateCb);
+    });
+
+    it('should let all the watch be cancelled even if one of them throws', () => {
+      const cancel = queue.monitorWorkers(failCb, {debounce});
+
+      cancelRemoveWorkers.throws();
+      cancelRemoveTaskClaims.throws();
+      presenceRef.off.throws();
+
+      cancel();
+      sinon.assert.calledOnce(cancelRemoveWorkers);
+      sinon.assert.calledOnce(cancelRemoveTaskClaims);
+      sinon.assert.calledOnce(presenceRef.off);
+    });
+
+  });
+
   describe('solutionRelativePath', () => {
 
     ['', '/'].map(start => {
@@ -776,5 +846,6 @@ describe('queue', () => {
     });
 
   });
+
 
 });

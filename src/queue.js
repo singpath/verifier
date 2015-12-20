@@ -1,7 +1,7 @@
 'use strict';
 
 const Firebase = require('firebase');
-const debounce = require('lodash.debounce');
+const lodashDebounce = require('lodash.debounce');
 const once = require('lodash.once');
 
 
@@ -545,31 +545,42 @@ module.exports = class Queue extends events.EventEmitter {
    *
    * @return {Function} function to cancel monitoring
    */
-  monitorWorkers() {
+  monitorWorkers(failureHandler, opts) {
     let cancelWorkerWatch = noop;
     let cancelTaskWatch = noop;
 
+    opts = opts || {};
+
+    const debounce = opts.debounce || lodashDebounce;
     const presenceRef = this.workersRef.child(this.authData.uid).child('presence');
     const presenceHandler = presenceRef.on('value', debounce(snapshot => {
       const now = snapshot.val();
       this.logger.debug('Presence Time: %s', new Date(now));
 
       cancelWorkerWatch();
-      cancelWorkerWatch = this.removeWorker(now - 2 * this.opts.presenceDelay);
+      cancelWorkerWatch = this.removeWorkers(now - 2 * this.opts.presenceDelay, failureHandler);
 
       cancelTaskWatch();
-      cancelTaskWatch = this.removeTaskClaims(now - 2 * this.opts.taskTimeout);
+      cancelTaskWatch = this.removeTaskClaims(now - 2 * this.opts.taskTimeout, failureHandler);
 
-    }, 1000));
+    }, 1000), failureHandler);
 
     return () => {
-      presenceRef.off('value', presenceHandler);
-      cancelWorkerWatch();
-      cancelTaskWatch();
+      [
+        () => presenceRef.off('value', presenceHandler),
+        cancelWorkerWatch,
+        cancelTaskWatch
+      ].forEach(fn => {
+        try {
+          fn();
+        } catch (e) {
+          this.logger.error(e.toString());
+        }
+      });
     };
   }
 
-  removeWorker(olderThan) {
+  removeWorkers(olderThan, failureHandler) {
     this.logger.debug('Removing worker older than %s...', new Date(olderThan));
 
     const query = this.workersRef.orderByChild('presence').endAt(olderThan).limitToFirst(1);
@@ -585,12 +596,12 @@ module.exports = class Queue extends events.EventEmitter {
           this.logger.info('Worker "%s" removed', key);
         }
       });
-    });
+    }, failureHandler);
 
     return () => query.off('child_added', handler);
   }
 
-  removeTaskClaims(claimedBefore) {
+  removeTaskClaims(claimedBefore, failureHandler) {
     this.logger.debug('Removing claims on task older than %s...', new Date(claimedBefore));
 
     const query = this.tasksRef.orderByChild('completed').equalTo(false);
@@ -604,7 +615,7 @@ module.exports = class Queue extends events.EventEmitter {
       const key = snapshot.key();
       this.logger.debug('Removing old claim on %s...', key);
       this.removeTaskClaim({key});
-    });
+    }, failureHandler);
 
     return () => query.off('child_added', handler);
   }

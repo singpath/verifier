@@ -7,6 +7,9 @@ const Firebase = require('firebase');
 const verifier = require('../');
 const verifierComponent = require('../src/verifier');
 
+const noop = () => undefined;
+const unexpected = () => Promise.reject(new Error('Unexpected'));
+
 
 describe('queue', () => {
   let firebaseClient, queue, dockerClient;
@@ -553,9 +556,9 @@ describe('queue', () => {
       const addedValueCb = query.on.firstCall.args[1];
       const updatedValueCb = query.on.lastCall.args[1];
 
+      query.off.throws();
       cancel();
 
-      query.off.throws();
       sinon.assert.calledTwice(query.off);
       sinon.assert.calledWithExactly(query.off, 'child_added', addedValueCb);
       sinon.assert.calledWithExactly(query.off, 'child_changed', updatedValueCb);
@@ -772,41 +775,143 @@ describe('queue', () => {
       });
     });
 
+    it('should reject if it failed to save the results', () => {
+      task.data.solutionRef = 'singpath/queuedSolution/some/where';
+      queue.savePushTaskResults.returns(Promise.reject());
+      queue.savePullTaskResults.returns(Promise.reject());
+
+      return queue.saveTaskResults(task, results).then(unexpected, noop);
+    });
+
   });
 
   describe('runTask', () => {
+    let key, data, results, task;
 
     beforeEach(() => {
+      key = 'someKey';
+      data = {payload: {}};
+      task = {key, data};
+      results = {solved: false};
+
       sinon.stub(queue, 'claimTask').returns(Promise.resolve());
-      sinon.stub(queue, 'saveTaskResults').returns(Promise.resolve());
+      sinon.stub(verifierComponent, 'verify').returns(Promise.resolve(results));
+      sinon.stub(queue, 'saveTaskResults').withArgs(
+        sinon.match.object, results
+      ).returns(Promise.resolve(results));
       sinon.stub(queue, 'removeTaskClaim').returns(Promise.resolve());
-      sinon.stub(queue.tasksToRun, 'shift').returns();
-      sinon.stub(verifierComponent, 'verify').returns(Promise.resolve());
     });
 
     afterEach(() => {
       verifierComponent.verify.restore();
     });
 
-    it('should run the next task in queue after completion', () => {
-      sinon.spy(queue, 'runTask');
-      queue.tasksToRun.shift.onFirstCall().returns({});
-      queue.tasksToRun.shift.onSecondCall().returns(undefined);
-
-      return queue.runTask({}).then(() => {
-        sinon.assert.calledThrice(queue.runTask);
+    it('should run the task', () => {
+      return queue.runTask(task).then(actualResults => {
+        expect(actualResults).to.be(results);
       });
+    });
+
+    it('should claim the task', () => {
+      return queue.runTask({key, data}).then(() => {
+        sinon.assert.calledOnce(queue.claimTask);
+        sinon.assert.calledWithExactly(queue.claimTask, task);
+      });
+    });
+
+    it('should resolve to undefined if it fails to claim the task', () => {
+      queue.claimTask.returns(Promise.reject(new Error()));
+
+      return queue.runTask({key, data}).then(
+        results => expect(results).to.be(undefined)
+      );
+    });
+
+    it('should verify the task', () => {
+      queue.imageTag = '2.2.0';
+
+      return queue.runTask({key, data}).then(() => {
+        sinon.assert.calledOnce(verifierComponent.verify);
+        sinon.assert.callOrder(queue.claimTask, verifierComponent.verify);
+        sinon.assert.calledWithExactly(
+          verifierComponent.verify,
+          queue.dockerClient,
+          data.payload,
+          sinon.match.has('imageTag', '2.2.0')
+        );
+      });
+    });
+
+    it('should reject if it fails to verify the task', () => {
+      const err = new Error();
+
+      verifierComponent.verify.returns(Promise.reject(err));
+
+      return queue.runTask({key, data}).then(
+        unexpected,
+        e => expect(e).to.be(err)
+      );
+    });
+
+    it('should remove claim if it fails to verify the task', () => {
+      verifierComponent.verify.returns(Promise.reject(new Error()));
+
+      return queue.runTask({key, data}).then(unexpected, noop).then(() => {
+        sinon.assert.calledOnce(queue.removeTaskClaim);
+        sinon.assert.callOrder(verifierComponent.verify, queue.removeTaskClaim);
+        sinon.assert.calledWithExactly(queue.removeTaskClaim, task);
+      });
+    });
+
+    it('should save the task result', () => {
+      return queue.runTask({key, data}).then(() => {
+        sinon.assert.calledOnce(queue.saveTaskResults);
+        sinon.assert.callOrder(verifierComponent.verify, queue.saveTaskResults);
+        sinon.assert.calledWithExactly(queue.saveTaskResults, task, results);
+      });
+    });
+
+    it('should reject if it fails to save the results', () => {
+      const err = new Error();
+
+      queue.saveTaskResults.withArgs(sinon.match.object, results).returns(
+        Promise.reject(err)
+      );
+
+      return queue.runTask({key, data}).then(
+        unexpected,
+        e => expect(e).to.be(err)
+      );
+    });
+
+    it('should remove claim if it fails to save the results', () => {
+      queue.saveTaskResults.withArgs(sinon.match.object, results).returns(
+        Promise.reject(new Error())
+      );
+
+      return queue.runTask({key, data}).then(unexpected, noop).then(() => {
+        sinon.assert.calledOnce(queue.removeTaskClaim);
+        sinon.assert.callOrder(queue.saveTaskResults, queue.removeTaskClaim);
+        sinon.assert.calledWithExactly(queue.removeTaskClaim, task);
+      });
+    });
+
+    it('should reject if the task is not valid', () => {
+      return Promise.all([
+        queue.runTask().then(unexpected, noop),
+        queue.runTask({key}).then(unexpected, noop),
+        queue.runTask({data}).then(unexpected, noop)
+      ]);
     });
 
   });
 
   describe('sheduleTask', () => {
-    let key, data;
+    let key, data, result;
 
     beforeEach(() => {
-      sinon.stub(queue.tasksToRun, 'push');
-      sinon.stub(queue.tasksToRun, 'shift');
-      sinon.stub(queue, 'runTask');
+      result = {};
+      sinon.stub(queue, 'runTask').returns(Promise.resolve(result));
 
       key = 'someTaskId';
       data = {
@@ -818,49 +923,124 @@ describe('queue', () => {
     });
 
     it('should shedule task', () => {
-      queue.sheduleTask(key, data);
-      sinon.assert.calledOnce(queue.tasksToRun.push);
-      sinon.assert.calledWithExactly(queue.tasksToRun.push, {key, data});
+      return queue.sheduleTask(key, data).then(
+        actualResult => expect(actualResult).to.be(actualResult)
+      );
+    });
+
+    it('should reject if the task failed', () => {
+      const err = new Error();
+
+      queue.runTask.returns(Promise.reject(err));
+
+      return queue.sheduleTask(key, data).then(
+        () => Promise.reject(new Error('unexpected')),
+        e => expect(e).to.be(err)
+      );
     });
 
     it('should skip task if the worker is not authenticated', () => {
       queue.authData.uid = undefined;
-      queue.sheduleTask(key, data);
-      sinon.assert.notCalled(queue.tasksToRun.push);
+
+      return queue.sheduleTask(key, data).then(
+        () => Promise.reject(new Error('unexpected')),
+        () => undefined
+      );
     });
 
     it('should skip task if the worker is not a worker', () => {
       queue.authData.auth.isWorker = undefined;
-      queue.sheduleTask(key, data);
-      sinon.assert.notCalled(queue.tasksToRun.push);
+
+      return queue.sheduleTask(key, data).then(
+        () => Promise.reject(new Error('unexpected')),
+        () => undefined
+      );
     });
 
     it('should skip task if the worker is not a worker for the correct queue', () => {
       queue.authData.auth.queue = 'foo';
-      queue.sheduleTask(key, data);
-      sinon.assert.notCalled(queue.tasksToRun.push);
+
+      return queue.sheduleTask(key, data).then(
+        () => Promise.reject(new Error('unexpected')),
+        () => undefined
+      );
     });
 
     it('should skip task with unsupported language', () => {
       data.payload.language = 'dinolang';
 
-      queue.sheduleTask(key, data);
-      sinon.assert.notCalled(queue.tasksToRun.push);
+      return queue.sheduleTask(key, data).then(
+        () => Promise.reject(new Error('unexpected')),
+        () => undefined
+      );
     });
 
     it('should skip task with worker already tried to run it before', () => {
       data.tries.someWorker = 12345;
 
-      queue.sheduleTask(key, data);
-      sinon.assert.notCalled(queue.tasksToRun.push);
+      return queue.sheduleTask(key, data).then(
+        () => Promise.reject(new Error('unexpected')),
+        () => undefined
+      );
+    });
+
+  });
+
+  describe('claimTask', () => {
+    let taskRef, task;
+
+    beforeEach(() => {
+      taskRef = { update: sinon.stub().yields(null) };
+      queue.tasksRef.child.withArgs('someTaskId').returns(taskRef);
+
+      task = { key: 'someTaskId' };
+    });
+
+    it('should claimTask', () => {
+      return queue.claimTask(task).then(() => {
+        sinon.assert.calledOnce(taskRef.update);
+        sinon.assert.calledWithExactly(
+          taskRef.update,
+          sinon.match(data => {
+            return (
+              Object.keys(data).length === 3 &&
+              sinon.match({
+                worker: 'someWorker',
+                started: true,
+                startedAt: Firebase.ServerValue.TIMESTAMP
+              }, data)
+            );
+          }),
+          sinon.match.func
+        );
+      });
+    });
+
+    it('should reject if the claim failed', () => {
+      const err = new Error();
+
+      taskRef.update.yields(err);
+
+      return queue.claimTask(task).then(
+        unexpected,
+        e => expect(e).to.be(err)
+      );
+    });
+
+    it('should reject if the use is not a worker', () => {
+      queue.authData.auth.isWorker = false;
+      return queue.claimTask(task).then(unexpected, noop);
     });
 
   });
 
   describe('removeTaskClaim', () => {
-    let task;
+    let taskRef, task;
 
     beforeEach(() => {
+      taskRef = { update: sinon.stub().yields(null) };
+      queue.tasksRef.child.withArgs('someTaskId').returns(taskRef);
+
       task = {
         key: 'someTaskId',
         data: {
@@ -871,12 +1051,9 @@ describe('queue', () => {
 
     it('should remove claim', () => {
       return queue.removeTaskClaim(task).then(() => {
-        sinon.assert.calledOnce(queue.tasksRef.child);
-        sinon.assert.calledWithExactly(queue.tasksRef.child, 'someTaskId');
-
-        sinon.assert.calledOnce(someTaskRef.update);
+        sinon.assert.calledOnce(taskRef.update);
         sinon.assert.calledWithExactly(
-          someTaskRef.update,
+          taskRef.update,
           sinon.match(data => {
             return (
               Object.keys(data).length === 4 &&
@@ -905,7 +1082,7 @@ describe('queue', () => {
 
       return queue.removeTaskClaim(task).then(() => {
         sinon.assert.calledWithExactly(
-          someTaskRef.update,
+          taskRef.update,
           sinon.match(data => {
             return (
               Object.keys(data).length === 3 &&
@@ -917,7 +1094,99 @@ describe('queue', () => {
       });
     });
 
+    it('should reject if fails to remove the claim', () => {
+      const err = new Error();
+
+      taskRef.update.yields(err);
+
+      return queue.removeTaskClaim(task).then(
+        unexpected,
+        e => expect(e).to.be(err)
+      );
+    });
+
+  });
+
+  describe('reset', () => {
+    let completeTasks;
+
+    beforeEach(() => {
+      const resolvers = [];
+
+      // mock task procession and block task completion.
+      queue.runTask = () => {
+        return new Promise((resolve) => {
+          resolvers.push(resolve);
+        });
+      };
+
+      completeTasks = () => resolvers.map(resolve => resolve());
+
+      queue.taskQueue.concurrency = 1;
+      queue.taskQueue.push([{}, {}, {}]);
+    });
+
+
+    it('should empty the in memory queue', () => {
+      expect(queue.taskQueue.length()).to.be(3);
+      queue.reset();
+      expect(queue.taskQueue.length()).to.be(0);
+    });
+
+    it('should return a promise resolving when all running tasks are completed', done => {
+      let isReset = false;
+
+      poll(() => {
+        return queue.taskQueue.running() > 0;
+      }, 10).then(() => {
+        const resetPromise = queue.reset().then(() => isReset = true);
+
+        setTimeout(() => {
+          expect(isReset).to.be(false);
+
+          completeTasks();
+
+          resetPromise.then(() => done(), done);
+        }, 10);
+      });
+    });
+
+    it('should reject if the user is not a worker', () => {
+      queue.authData.auth.isWorker = false;
+      return queue.reset().then(unexpected, noop);
+    });
+
   });
 
 
 });
+
+
+function poll(fn, interval, timeout) {
+  timeout = timeout || 2000;
+  interval = interval || 100;
+
+  if (interval < 10) {
+    interval = 10;
+  }
+
+  return new Promise((resolve, reject) => {
+    let tries = timeout / interval;
+
+    test();
+
+    function test() {
+      const result = fn();
+
+      if (result) {
+        return resolve(result);
+      }
+
+      if (--tries <= 0) {
+        return reject(new Error('timeout'));
+      }
+
+      setTimeout(test, interval);
+    }
+  });
+}

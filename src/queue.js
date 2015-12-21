@@ -602,8 +602,11 @@ module.exports = class Queue extends events.EventEmitter {
     };
   }
 
-  removeWorkers(olderThan, failureHandler) {
+  removeWorkers(olderThan, onQueryFailure, onRemovalError) {
     this.logger.debug('Removing worker older than %s...', new Date(olderThan));
+
+    onQueryFailure = onQueryFailure || noop;
+    onRemovalError = onRemovalError || noop;
 
     const query = this.workersRef.orderByChild('presence').endAt(olderThan).limitToFirst(1);
     const handler = query.on('child_added', snapshot => {
@@ -614,11 +617,12 @@ module.exports = class Queue extends events.EventEmitter {
       snapshot.ref().remove(err => {
         if (err) {
           this.logger.error('Failed to remove worker "%s": %s', key, err.toString());
+          onRemovalError(err);
         } else {
           this.logger.info('Worker "%s" removed', key);
         }
       });
-    }, failureHandler);
+    }, onQueryFailure);
 
     return () => query.off('child_added', handler);
   }

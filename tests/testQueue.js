@@ -1158,6 +1158,70 @@ describe('queue', () => {
 
   });
 
+  describe('removeWorkers', () => {
+    let onQueryFailure, onRemovalFailure, query, snapshot, key, taskRef;
+
+    beforeEach(() => {
+      onQueryFailure = sinon.spy();
+      onRemovalFailure = sinon.spy();
+      key = 'someTaskId';
+      taskRef = {
+        remove: sinon.stub().yields(null)
+      };
+      snapshot = {
+        ref: () => taskRef,
+        key: () => key
+      };
+      query = {
+        endAt: sinon.stub().withArgs(12345).returnsThis(),
+        limitToFirst: sinon.stub().returnsThis(),
+        on: sinon.stub(),
+        off: sinon.spy()
+      };
+
+      query.on.withArgs('child_added').returnsArg(1);
+      query.on.withArgs('child_added').yields(snapshot);
+
+      queue.workersRef.orderByChild = sinon.stub().withArgs('presence').returns(query);
+    });
+
+    it('should remove old workers', () => {
+      queue.removeWorkers(12345);
+      sinon.assert.calledOnce(taskRef.remove);
+    });
+
+    it('should allow removal to be cancelled', () => {
+      const cancel = queue.removeWorkers(12345);
+      const handler = query.on.lastCall.args[1];
+
+      cancel();
+      sinon.assert.calledOnce(query.off);
+      sinon.assert.calledOnce(query.off, 'child_added', handler);
+    });
+
+    it('should call the failure handler on query failure', () => {
+      query.on = sinon.stub();
+      query.on.withArgs('child_added').returnsArg(1);
+
+      queue.removeWorkers(12345, onQueryFailure);
+      sinon.assert.notCalled(taskRef.remove);
+
+      query.on.withArgs('child_added').callArg(2);
+      sinon.assert.calledOnce(onQueryFailure);
+    });
+
+    it('should call the failure handler on query failure', () => {
+      const err = new Error();
+
+      taskRef.remove.yields(err);
+      queue.removeWorkers(12345, null, onRemovalFailure);
+
+      query.on.withArgs('child_added').callArg(2);
+      sinon.assert.calledOnce(onRemovalFailure);
+      sinon.assert.calledWithExactly(onRemovalFailure, err);
+    });
+
+  });
 
 });
 

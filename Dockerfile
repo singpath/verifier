@@ -6,7 +6,11 @@ ENV SINGPATH_PUSH_USER_ID="#1"
 ENV SKIP_BUILD="0"
 
 # Update npm, the docker client (for developpement) and create expected folders.
-RUN npm install npm -g && \
+RUN apt-get update -y && \
+	apt-get install -y git && \
+	apt-get clean && \
+	rm -rf /var/lib/apt/lists/* && \
+	npm install npm -g && \
 	npm -v && \
 	curl -SL -O https://get.docker.com/builds/Linux/x86_64/docker-1.9.0 && \
 	chmod +x docker-1.9.0 && \

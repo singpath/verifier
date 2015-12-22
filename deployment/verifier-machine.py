@@ -307,7 +307,7 @@ def start(opts):
         '--group-add', str(opts.docker_gid),
         '-e', 'SINGPATH_FIREBASE_SECRET=%s' % opts.firebase_auth_secret,
         '-e', 'SINGPATH_FIREBASE_QUEUE=%s' % queue_url,
-        '-e', 'SINGPATH_FIREBASE_MAX_WORKER=%s' % opts.max_worker,
+        '-e', 'SINGPATH_MAX_WORKER=%s' % opts.max_worker,
         '-e', 'SINGPATH_IMAGE_TAG=%s' % opts.verifier_tag,
         '-e', 'SKIP_BUILD=0',
         'singpath/verifier2'

@@ -131,27 +131,34 @@ module.exports = class Queue extends events.EventEmitter {
    * @return {Promise} Resolve when the worker is registered, to a function to
    *                   deregister it.
    */
-  registerWorker() {
+  registerWorker(opts) {
+    opts = opts || {};
+
     if (!this.isWorker()) {
       return Promise.reject(new Error('The user is not logged in as a worker for this queue'));
     }
+
+    const timer = Object.assign({
+      start: setInterval,
+      cancel: clearInterval
+    }, opts.timer || {});
 
     return promisedSet(this.workersRef.child(this.authData.uid), {
       startedAt: Firebase.ServerValue.TIMESTAMP,
       presence: Firebase.ServerValue.TIMESTAMP
     }).then(ref => {
+      let intervalId, stopTimer;
+
       this.logger.info('Worker registered.');
 
-      let timer, stopTimer;
-
-      timer = setInterval(() => {
+      intervalId = timer.start(() => {
         this.updatePresence().catch(stopTimer);
       }, this.opts.presenceDelay);
 
       stopTimer = () => {
-        if (timer !== undefined) {
-          clearInterval(timer);
-          timer = undefined;
+        if (intervalId !== undefined) {
+          timer.cancel(intervalId);
+          intervalId = undefined;
           this.logger.debug('Stopping updating presence.');
         }
       };

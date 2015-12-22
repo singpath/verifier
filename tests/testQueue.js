@@ -411,6 +411,114 @@ describe('queue', () => {
 
   });
 
+  describe('registerWorker', () => {
+    let timer, workerRef;
+
+    beforeEach(() => {
+      timer = {
+        start: sinon.stub().returns(1),
+        cancel: sinon.spy()
+      };
+
+      workerRef = {
+        set: sinon.stub().yields(null)
+      };
+      queue.workersRef.child = sinon.stub().withArgs('someWorker').returns(workerRef);
+
+      sinon.stub(queue, 'updatePresence').returns(Promise.resolve());
+    });
+
+    it('should register the worker', () => {
+      return queue.registerWorker({timer}).then(() => {
+        sinon.assert.calledOnce(queue.workersRef.child);
+        sinon.assert.calledOnce(workerRef.set);
+        sinon.assert.calledOnce(workerRef.set, sinon.match({
+          'startedAt': Firebase.ServerValue.TIMESTAMP,
+          'presence': Firebase.ServerValue.TIMESTAMP
+        }));
+      });
+    });
+
+    it('should reject if the user is not a worker', () => {
+      queue.authData.auth.isWorker = false;
+      return queue.registerWorker({timer}).then(unexpected, noop);
+    });
+
+    it('should update presence at regular interval', () => {
+      queue.opts.presenceDelay = 5000;
+
+      return queue.registerWorker({timer}).then(() => {
+        sinon.assert.calledOnce(timer.start);
+        sinon.assert.calledOnce(timer.start, sinon.match.func, 5000);
+
+        timer.start.callArg(0);
+        sinon.assert.calledOnce(queue.updatePresence);
+        timer.start.callArg(0);
+        sinon.assert.calledTwice(queue.updatePresence);
+      });
+    });
+
+    it('should stop updating the worker presence after an update fails', () => {
+      queue.updatePresence.returns(Promise.reject(new Error()));
+
+      return queue.registerWorker({timer}).then(() => {
+        timer.start.callArg(0);
+
+        return poll(() => timer.cancel.called, 10);
+      }).then(() => {
+        sinon.assert.calledOnce(timer.cancel);
+        sinon.assert.calledWithExactly(timer.cancel, 1);
+      });
+    });
+
+    it('should allow the presence update to be cancelled', () => {
+      return queue.registerWorker({timer}).then(cancel => {
+        cancel();
+
+        sinon.assert.calledOnce(timer.cancel);
+        sinon.assert.calledWithExactly(timer.cancel, 1);
+      });
+    });
+
+    it('should reject the cancellation if the user is not worker', () => {
+      return queue.registerWorker({timer}).then(cancel => {
+        queue.authData.auth.isWorker = false;
+        workerRef.set = sinon.stub().yields(null);
+        return cancel();
+      }).then(
+        unexpected,
+        () => {
+          // cancel timer but do not try to removethe worker
+          sinon.assert.calledOnce(timer.cancel);
+          sinon.assert.notCalled(workerRef.set);
+        }
+      );
+    });
+
+    it('should allow the worker to be removed from the queue (if the user is a worker)', () => {
+      return queue.registerWorker({timer}).then(cancel => {
+        workerRef.set = sinon.stub().yields(null);
+        return cancel();
+      }).then(() => {
+        sinon.assert.calledOnce(workerRef.set);
+        sinon.assert.calledWithExactly(workerRef.set, null, sinon.match.func);
+      });
+    });
+
+    it('should reject if the worker removal failed', () => {
+      const err = new Error();
+
+      return queue.registerWorker({timer}).then(cancel => {
+        workerRef.set = sinon.stub().yields(err);
+        return cancel();
+      }).then(
+        unexpected,
+        e => expect(e).to.be(err)
+      );
+    });
+
+  });
+
   describe('monitorWorkers', () => {
     let failCb, workerRef, presenceRef, debounce, presenceSnapshot;
     let cancelRemoveWorkers;

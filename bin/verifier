@@ -62,12 +62,12 @@ function main() {
   ).then(
     settings => parseArgs(settings)
   ).then(args => {
-    let level = verifier.logger.levels.INFO;
+    let level = verifier.logger.INFO;
 
     if (args.debug) {
-      level = verifier.logger.levels.DEBUG;
+      level = verifier.logger.DEBUG;
     } else if (args.quiet) {
-      level = verifier.logger.levels.ERROR;
+      level = verifier.logger.ERROR;
     }
 
     return args.func(args, verifier.logger({level}));

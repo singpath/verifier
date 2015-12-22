@@ -3,6 +3,7 @@
 'use strict';
 
 const argparse = require('argparse');
+const camelCase = require('lodash.camelcase');
 const deepDiff = require('deep-diff');
 const Firebase = require('firebase');
 const FirebaseTokenGenerator = require('firebase-token-generator');
@@ -16,27 +17,26 @@ const fs = require('../src/promiseFs');
 const packageJson = require('../package.json');
 const verifier = require('../');
 
-const ERROR_NO_ENDPOINT = 'A endpoint is required.';
+const ERROR_NO_ENDPOINT = 'A queue path is required.';
 const ERROR_NO_SECRET = 'A firebase auth secret is required.';
-const ERROR_INVALID_ENDOPOINT = 'Invalid queue endpoint.';
+const ERROR_INVALID_QUEUE_PATH = 'Invalid queue path.';
 
 const HINT_AUTH_SECRET = 'A Firebase auth secret can be found at https://%s.firebaseio.com/?page=Admin';
 
 const DEFAULT_SETTINGS = {
-  endpoint: 'https://singpath-play.firebaseio.com/singpath/queues/default',
-  maxworker: 10,
-  verifiertag: 'latest'
+  firebaseQueue: 'https://singpath-play.firebaseio.com/singpath/queues/default',
+  maxWorker: 10,
+  imageTag: 'latest'
 };
 
 const EPILOG = `Environment variables:
-  SINGPATH_FIREBASE_SECRET      Firebase auth secret.
-  SINGPATH_FIREBASE_QUEUE       Path to the firebase queue.
-  SINGPATH_FIREBASE_MAX_WORKER  Concurrent verification limit.
-  SINGPATH_IMAGE_TAG            Verifier image tag.
-  DOCKER_HOST                   Docker daemon socket to connect to.
-  DOCKER_TLS_VERIFY             Use TLS with the Docker daemon.
-  DOCKER_CERT_PATH              Location of your docker-machine authentication
-                                keys.
+  SINGPATH_FIREBASE_SECRET  Firebase auth secret.
+  SINGPATH_FIREBASE_QUEUE   Path to the firebase queue.
+  SINGPATH_MAX_WORKER       Concurrent verification limit.
+  SINGPATH_IMAGE_TAG        Verifier image tag.
+  DOCKER_HOST               Docker daemon socket to connect to.
+  DOCKER_TLS_VERIFY         Use TLS with the Docker daemon.
+  DOCKER_CERT_PATH          Location of your docker-machine authentication keys.
 
 Config:
   You can set the default values with a JSON file named '.singpathrc' in your
@@ -45,47 +45,34 @@ Config:
   Example:
 
     {
-      "endpoint": "https://my-db.firebaseio.com/singpath/queues/default",
-      "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      "firebaseQueue": "https://my-db.firebaseio.com/singpath/queues/default",
+      "firebaseSecret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
     }
 
 `;
 
 
-if (require.main === module) {
-  main();
-}
+const CMDS = [{
+  name: 'run',
+  description: 'Start the verifier daemon',
 
-function main() {
-  fileSettings('./.singpathrc', DEFAULT_SETTINGS).then(
-    settings => envSettings(settings)
-  ).then(
-    settings => parseArgs(settings)
-  ).then(args => {
-    let level = verifier.logger.INFO;
+  options(parser, defaults) {
+    commonOptions(parser, defaults);
 
-    if (args.debug) {
-      level = verifier.logger.DEBUG;
-    } else if (args.quiet) {
-      level = verifier.logger.ERROR;
-    }
+    parser.addArgument(['-c', '--max-worker'], {
+      help: 'Concurrent verification limit\n(default: %(defaultValue)s)',
+      type: 'int',
+      defaultValue: defaults.maxWorker
+    });
+  },
 
-    return args.func(args, verifier.logger({level}));
-  }).catch( err => {
-    console.error('Unexpected error: %s\n\n%s', err, err.stack);
-    process.exit(1);
-  });
-}
+  cmd(opts, logger) {
+    return requireSecret(opts, logger).then(
+      () => singpathQueue(opts, logger)
+    ).then(q => {
+      const generator = new FirebaseTokenGenerator(opts.firebaseSecret);
+      const auth = verifier.auth(generator, opts.debug);
 
-const cmd = {
-
-  run(args, logger) {
-    logger.info('Using queue at %s', args.endpoint);
-
-    const generator = new FirebaseTokenGenerator(args.secret);
-    const auth = verifier.auth(generator, args.debug);
-
-    return singpathQueue(args, logger).then(q => {
       logger.info('Starting watching queue...');
 
       q.on('watchStopped', err => {
@@ -103,81 +90,126 @@ const cmd = {
 
       return watch(q, auth, logger);
     });
+  }
+}, {
+  name: 'push',
+  description: 'Push a task to the Firebase queue',
+
+  options(parser, defaults) {
+    commonOptions(parser, defaults);
+
+    parser.addArgument(['payload'], {
+      help: (
+        'JSON or YAML payload to push; \n' +
+        'must include `language`, `tests` and `solution`'
+      )
+    });
   },
 
-  push(args, logger) {
-
+  cmd(opts, logger) {
     logger.info('parsing yaml encoded solutions');
-    const solutions = loadSolutions(args.payload, {logger});
+    const solutions = loadSolutions(opts.payload, {logger});
 
     if (solutions.length < 0) {
       logger.error('no solution to push');
       process.exit(131);
     }
 
-    const generator = new FirebaseTokenGenerator(args.secret);
-    const auth = verifier.auth(generator, args.debug);
-    const authToken = auth.user();
+    return requireSecret(opts, logger).then(
+      () => singpathQueue(opts, logger)
+    ).then(q => {
+      const generator = new FirebaseTokenGenerator(opts.firebaseSecret);
+      const auth = verifier.auth(generator, opts.debug);
+      const authToken = auth.user();
 
-    return singpathQueue(args, logger).then(q => {
       return q.auth(authToken).then(() => {
         return pushSolutions(q, solutions, logger);
       }).then(
         failures => process.exit(failures)
       );
     });
+  }
+}, {
+  name: 'settings',
+  description: 'Print settings',
+
+  options(parser, defaults) {
+    commonOptions(parser, defaults);
   },
 
-  settings(args) {
-    delete args.func;
+  cmd(opts) {
+    delete opts.func;
 
-    return Promise.resolve(args['prompt_secret']).then(doPrompt => {
-      delete args['prompt_secret'];
+    return Promise.resolve(opts.promptSecret).then(doPrompt => {
+      delete opts.promptSecret;
 
       if (!doPrompt || !process.stdout.isTTY) {
-        return args.secret;
+        return opts.firebaseSecret;
       }
 
-      return promptSecret(args.endpoint);
+      return promptSecret(opts.firebaseQueue);
     }).then(
-      secret => args.secret = secret
+      secret => opts.firebaseSecret = secret
     ).then(
-      () => console.log(JSON.stringify(args, null, 4))
+      () => console.log(JSON.stringify(opts, null, 4))
     );
-  },
+  }
+}, {
+  name: 'build-verifiers',
+  description: 'Build verifier images',
 
-  build(args, logger) {
+  options() {},
+
+  cmd(opts, logger) {
     return Object.keys(verifier.images).reduce((chain, language) => {
       const image = verifier.images[language];
 
       return chain.then(() => {
         logger.info('building image "%s"...', image.name);
-        return buildImage(image, args.verifiertag, logger);
+        return buildImage(image, opts.imageTag, logger);
       });
     }, Promise.resolve());
-  },
+  }
+}, {
+  name: 'pull-verifiers',
+  description: 'Pull verifier images',
 
-  pull(args, logger) {
+  options() {},
+
+  cmd(opts, logger) {
     return Object.keys(verifier.images).reduce((chain, language) => {
       const image = verifier.images[language];
 
       return chain.then(() => {
         logger.info('pulling image "%s"...', image.name);
-        return pullImage(image, args.verifiertag, logger);
+        return pullImage(image, opts.imageTag, logger);
       });
     }, Promise.resolve());
+  }
+}, {
+  name: 'test',
+  description: 'Test verifier images against a yaml encoded array of solution',
+
+  options(parser) {
+    parser.addArgument(['payload'], {
+      help: (
+        'YAML encoded payload; \n' +
+        'each solution must include `language`, `tests`, `solution` and `expected`; \n' +
+        '`expected` must match the result of the verifier.'
+      )
+    });
   },
 
-  test(args, logger) {
-    const solutions = loadSolutions(args.payload, {logger});
+  cmd(opts, logger) {
+    const solutions = loadSolutions(opts.payload, {logger});
 
     if (solutions.length < 0) {
       logger.error('no solution to test.');
       process.exit(132);
     }
 
-    verifier.dockerClient(args).then(client => {
-      return testSolutions(client, solutions, args.verifiertag, logger);
+    verifier.dockerClient(opts).then(client => {
+      return testSolutions(client, solutions, opts.imageTag, logger);
     }).then(
       () => logger.info('Tests run successfully.')
     ).catch(err => {
@@ -185,7 +217,93 @@ const cmd = {
       process.exit(133);
     });
   }
-};
+}];
+
+
+if (require.main === module) {
+  main();
+}
+
+
+function main() {
+  fileSettings('./.singpathrc', DEFAULT_SETTINGS).then(
+    settings => envSettings(settings)
+  ).then(
+    settings => parseArgs(settings)
+  ).then(opts => {
+    let level = verifier.logger.INFO;
+
+    if (opts.debug) {
+      level = verifier.logger.DEBUG;
+    } else if (opts.quiet) {
+      level = verifier.logger.ERROR;
+    }
+
+    return opts.func(opts, verifier.logger({level}));
+  }).catch( err => {
+    console.error('Unexpected error: %s\n\n%s', err, err.stack);
+    process.exit(1);
+  });
+}
+
+function parseArgs(defaults, args) {
+  const parser = new argparse.ArgumentParser({
+    version: packageJson.version,
+    addHelp: true,
+    description: 'Push message',
+    formatterClass: argparse.RawTextHelpFormatter,
+    epilog: EPILOG
+  });
+
+  parser.addArgument(['-d', '--debug' ], {
+    action: 'storeTrue',
+    help: 'print debug messages'
+  });
+
+  parser.addArgument(['-s', '--silent' ], {
+    action: 'storeTrue',
+    help: 'print only error messages'
+  });
+
+  parser.addArgument(['--image-tag'], {
+    help: 'Verifier image tag\n(default: %(defaultValue)s)',
+    metavar: 'TAG',
+    defaultValue: defaults.imageTag
+  });
+
+  const subparsers = parser.addSubparsers();
+
+  CMDS.forEach(sub => {
+    const parser = subparsers.addParser(sub.name, {
+      addHelp: true,
+      description: sub.description,
+      formatterClass: argparse.RawTextHelpFormatter,
+      epilog: EPILOG
+    });
+
+    sub.options(parser, defaults);
+    parser.setDefaults({func: (opts, logger) => sub.cmd(opts, logger)});
+  });
+
+  return Object.assign(
+    {},
+    defaults,
+    camelCaseObject(parser.parseArgs(args))
+  );
+}
+
+function commonOptions(parser, defaults) {
+  parser.addArgument(['-e', '--firebase-queue' ], {
+    help: 'Path to the firebase queue\n(default: %(defaultValue)s)',
+    defaultValue: defaults.firebaseQueue
+  });
+
+  parser.addArgument(['-p', '--prompt-secret'], {
+    help: 'Prompt for the Firebase secret',
+    action: 'storeTrue',
+    defaultValue: defaults.promptSecret
+  });
+}
 
 function fileSettings(settingPath, defaults) {
   defaults = defaults || {};
@@ -202,139 +320,28 @@ function fileSettings(settingPath, defaults) {
 }
 
 function envSettings(defaults) {
-  const settings = Object.assign({}, defaults);
+  const prefix = 'SINGPATH_';
 
-  function update (key, envKey) {
-    if (process.env[envKey] == null) {
-      return;
-    }
-
+  return Object.keys(process.env).filter(
+    key => key.startsWith(prefix)
+  ).reduce((settings, envKey) => {
+    const key = camelCase(envKey.slice(prefix.length).toLowerCase());
     settings[key] = process.env[envKey];
-  }
-
-  update('secret', 'SINGPATH_FIREBASE_SECRET');
-  update('endpoint', 'SINGPATH_FIREBASE_QUEUE');
-  update('maxworker', 'SINGPATH_FIREBASE_MAX_WORKER');
-  update('verifiertag', 'SINGPATH_IMAGE_TAG');
-
-  return settings;
+    return settings;
+  }, defaults);
 }
 
-function parseArgs(defaults, args) {
-  const parser = new argparse.ArgumentParser({
-    version: packageJson.version,
-    addHelp: true,
-    description: 'Push message',
-    formatterClass: argparse.RawTextHelpFormatter,
-    epilog: EPILOG
-  });
-
-  parser.setDefaults(defaults);
-
-  parser.addArgument(['-d', '--debug' ], {
-    action: 'storeTrue',
-    help: 'print debug messages'
-  });
-
-  parser.addArgument(['-s', '--silent' ], {
-    action: 'storeTrue',
-    help: 'print only error messages'
-  });
-
-  parser.addArgument(['--verifiertag'], {
-    help: 'Verifier image tag\n(default: %(defaultValue)s)',
-    metavar: 'TAG'
-  });
-
-  const subparsers = parser.addSubparsers();
-  const runParser = subparsers.addParser('run', {
-    addHelp: true,
-    description: 'Start the verifier daemon',
-    formatterClass: argparse.RawTextHelpFormatter,
-    epilog: EPILOG
-  });
-  const pushParser = subparsers.addParser('push', {
-    addHelp: true,
-    description: 'Push a task to the Firebase queue',
-    formatterClass: argparse.RawTextHelpFormatter,
-    epilog: EPILOG
-  });
-  const settingsParser = subparsers.addParser('settings', {
-    addHelp: true,
-    description: 'Print settings',
-    formatterClass: argparse.RawTextHelpFormatter,
-    epilog: EPILOG
-  });
-  const buildParser = subparsers.addParser('build-verifiers', {
-    addHelp: true,
-    description: 'Build verifier images',
-    formatterClass: argparse.RawTextHelpFormatter,
-    epilog: EPILOG
-  });
-  const pullParser = subparsers.addParser('pull-verifiers', {
-    addHelp: true,
-    description: 'Pull verifier images',
-    formatterClass: argparse.RawTextHelpFormatter,
-    epilog: EPILOG
-  });
-  const testParser = subparsers.addParser('test', {
-    addHelp: true,
-    description: (
-      'Test verifier images against a yaml encoded array of solution'
-    ),
-    formatterClass: argparse.RawTextHelpFormatter,
-    epilog: EPILOG
-  });
-
-  [runParser, pushParser, settingsParser].forEach(parser => {
-    parser.addArgument(['-e', '--endpoint' ], {
-      help: 'Path to the firebase queue\n(default: %(defaultValue)s)'
-    });
-
-    parser.addArgument(['-p', '--prompt-secret'], {
-      help: 'Prompt for the Firebase secret',
-      action: 'storeTrue'
-    });
-
-    parser.setDefaults({
-      endpoint: defaults.endpoint,
-      'prompt_secret': defaults['prompt_secret']
-    });
-  });
-
-  runParser.setDefaults({func: requireSecret(cmd.run)});
-  runParser.addArgument(['-c', '--maxworker'], {
-    help: 'Concurrent verification limit\n(default: %(defaultValue)s)',
-    type: 'int',
-    defaultValue: defaults.maxworker
-  });
-
-  pushParser.setDefaults({func: requireSecret(cmd.push)});
-  pushParser.addArgument(['payload'], {
-    help: 'JSON or YAML payload to push; \nmust include `language`, `tests` and `solution`'
-  });
-
-  settingsParser.setDefaults({func: cmd.settings});
-
-  buildParser.setDefaults({func: cmd.build});
-  pullParser.setDefaults({func: cmd.pull});
-
-  testParser.addArgument(['payload'], {
-    help: (
-      'YAML encoded payload; \n' +
-      'each solution must include `language`, `tests`, `solution` and `expected`; \n' +
-      '`expected` must match the result of the verifier.'
-    )
-  });
-  testParser.setDefaults({func: cmd.test});
-
-  return parser.parseArgs(args);
+function camelCaseObject(obj) {
+  return Object.keys(obj).reduce((copy, key) => {
+    copy[camelCase(key)] = obj[key];
+    return copy;
+  }, {});
 }
 
 function singpathQueue(args, logger) {
-  const fbClient = new Firebase(args.endpoint);
-  const imageTag = args.verifiertag;
-  const maxWorker = args.maxworker;
+  const fbClient = new Firebase(args.firebaseQueue);
+  const imageTag = args.imageTag;
+  const maxWorker = args.maxWorker;
 
   return verifier.dockerClient(args).then(
     client => verifier.singpathQueue(
@@ -343,29 +350,27 @@ function singpathQueue(args, logger) {
   );
 }
 
-function requireSecret(func) {
-  return (args, logger) => {
-    return Promise.resolve(args['prompt_secret']).then(doPrompt => {
-      if (!doPrompt || !process.stdout.isTTY) {
-        return args.secret;
-      }
+function requireSecret(opts, logger) {
+  return Promise.resolve(opts.promptSecret).then(doPrompt => {
+    if (!doPrompt || !process.stdout.isTTY) {
+      return opts.firebaseSecret;
+    }
 
-      return promptSecret(args.endpoint);
-    }).then(secret => {
-      if (!secret) {
-        logger.error(ERROR_NO_SECRET);
-        process.exit(130);
-      }
+    return promptSecret(opts.firebaseQueue);
+  }).then(secret => {
+    if (!secret) {
+      logger.error(ERROR_NO_SECRET);
+      process.exit(130);
+    }
 
-      args.secret = secret;
-      return func(args, logger);
-    });
-  };
+    opts.firebaseSecret = secret;
+    return opts;
+  });
 }
 
-function promptSecret(endpoint) {
+function promptSecret(firebaseQueue) {
 
-  console.info(HINT_AUTH_SECRET, firebaseId(endpoint));
+  console.info(HINT_AUTH_SECRET, firebaseId(firebaseQueue));
 
   return new Promise((resolve, reject) => {
     const schema = {
@@ -384,23 +389,23 @@ function promptSecret(endpoint) {
       if (err) {
         reject(err);
       } else {
-        resolve(results.secret);
+        resolve(results.firebaseSecret);
       }
     });
   });
 }
 
-function firebaseId(endpoint) {
-  if (!endpoint) {
+function firebaseId(firebaseQueue) {
+  if (!firebaseQueue) {
     throw new Error(ERROR_NO_ENDPOINT);
   }
 
   let parsedUrl;
 
   try {
-    parsedUrl = url.parse(endpoint);
+    parsedUrl = url.parse(firebaseQueue);
   } catch (e) {
-    throw new Error(ERROR_INVALID_ENDOPOINT);
+    throw new Error(ERROR_INVALID_QUEUE_PATH);
   }
 
   return parsedUrl.hostname.split('.', 1).pop();

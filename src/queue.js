@@ -1,13 +1,13 @@
 'use strict';
 
 const Firebase = require('firebase');
-const debounce = require('lodash.debounce');
+const lodashDebounce = require('lodash.debounce');
 const once = require('lodash.once');
+const asyncLib = require('async');
 
 
 const noop = () => undefined;
 
-const FIFO = require('./fifo').FIFO;
 const verifier = require('./verifier');
 const events = require('events');
 
@@ -28,6 +28,7 @@ module.exports = class Queue extends events.EventEmitter {
     this.ref = firebaseClient;
     this.dockerClient = dockerClient;
     this.logger = options.logger || console;
+
     this.imageTag = options.imageTag;
     this.opts = {
       presenceDelay: options.presenceDelay || DEFAULT_PRESENCE_DELAY,
@@ -44,8 +45,13 @@ module.exports = class Queue extends events.EventEmitter {
     this.tasksRef = this.ref.child('tasks');
     this.workersRef = this.ref.child('workers');
 
-    this.tasksToRun = new FIFO();
-    this.taskRunning = 0;
+    this.taskQueue = asyncLib.queue((task, callback) => {
+      this.runTask(task).then(
+        result => callback(undefined, result)
+      ).catch(
+        err => callback(err)
+      );
+    }, this.opts.maxWorker);
 
     this.authData = undefined;
     this.ref.onAuth(authData => {
@@ -125,27 +131,34 @@ module.exports = class Queue extends events.EventEmitter {
    * @return {Promise} Resolve when the worker is registered, to a function to
    *                   deregister it.
    */
-  registerWorker() {
+  registerWorker(opts) {
+    opts = opts || {};
+
     if (!this.isWorker()) {
       return Promise.reject(new Error('The user is not logged in as a worker for this queue'));
     }
+
+    const timer = Object.assign({
+      start: setInterval,
+      cancel: clearInterval
+    }, opts.timer || {});
 
     return promisedSet(this.workersRef.child(this.authData.uid), {
       startedAt: Firebase.ServerValue.TIMESTAMP,
       presence: Firebase.ServerValue.TIMESTAMP
     }).then(ref => {
+      let intervalId, stopTimer;
+
       this.logger.info('Worker registered.');
 
-      let timer, stopTimer;
-
-      timer = setInterval(() => {
+      intervalId = timer.start(() => {
         this.updatePresence().catch(stopTimer);
       }, this.opts.presenceDelay);
 
       stopTimer = () => {
-        if (timer !== undefined) {
-          clearInterval(timer);
-          timer = undefined;
+        if (intervalId !== undefined) {
+          timer.cancel(intervalId);
+          intervalId = undefined;
           this.logger.debug('Stopping updating presence.');
         }
       };
@@ -213,15 +226,14 @@ module.exports = class Queue extends events.EventEmitter {
       });
 
       const stopWorkerWatch = this.monitorWorkers(failureHandler);
-      const stopAddedTaskWatch = this.monitorAddedTask(failureHandler);
-      const stopUpdatedTaskWatch = this.monitorUpdatedTask(failureHandler);
+      const stopPendingTaskWatch = this.monitorPendingTask(failureHandler);
 
       cancel = (err) => {
         this.emit('watchStopped', err);
         this.logger.info('Watch on new task stopped.');
 
         return Promise.all([
-          deregister, stopWorkerWatch, stopAddedTaskWatch, stopUpdatedTaskWatch
+          deregister, stopWorkerWatch, stopPendingTaskWatch
         ].map(fn => {
           try {
             return fn();
@@ -237,28 +249,30 @@ module.exports = class Queue extends events.EventEmitter {
     });
   }
 
-  monitorAddedTask(failHandler) {
+  /**
+   * Monitor task queue to shedule any (re)opened task.
+   *
+   * Any tasks pending in the queue, tasks added and task unclaimed later.
+   *
+   * @param  {Function} failHandler
+   * @return {Function}
+   */
+  monitorPendingTask(failHandler) {
     const query = this.tasksRef.orderByChild('started').equalTo(false);
-    const handler = query.on('child_added', snapshot => {
-      this.sheduleTask(snapshot.key(), snapshot.val());
-    }, failHandler);
+    const eventTypes = ['child_added', 'child_changed'];
+    const handler = snapshot => this.sheduleTask(snapshot.key(), snapshot.val());
 
-    return () => query.off('child_added', handler);
-  }
+    eventTypes.forEach(type => query.on(type, handler, failHandler));
 
-  monitorUpdatedTask(failHandler) {
-    const query = this.tasksRef.orderByChild('started').equalTo(false);
-    const handler = query.on('child_changed', snapshot => {
-      const val = snapshot.val();
-
-      if (val.started) {
-        return;
-      }
-
-      this.sheduleTask(snapshot.key(), val);
-    }, failHandler);
-
-    return () => query.off('child_added', handler);
+    return () => {
+      return eventTypes.map(type => {
+        try {
+          return query.off(type, handler);
+        } catch (e) {
+          this.logger.error(e.toString());
+        }
+      });
+    };
   }
 
   /**
@@ -269,6 +283,7 @@ module.exports = class Queue extends events.EventEmitter {
    *
    * @param  {string} key  Task id
    * @param  {Object} data Task body
+   * @return {Promise}
    */
   sheduleTask(key, data) {
     if (!this.isWorker()) {
@@ -276,44 +291,49 @@ module.exports = class Queue extends events.EventEmitter {
     }
 
     const language = data && data.payload && data.payload.language;
-
     if (!verifier.support(language)) {
       this.logger.info('Task ("%s") language ("%s") is not supported', key, language);
-      return;
+      return Promise.reject(new Error('Unsupported language'));
     }
 
     const lastTry = data && data.tries && data.tries[this.authData.uid];
-
     if (lastTry) {
       this.logger.info('Already failed to run task. Skipping it (%s).', key);
-      return;
+      return Promise.reject(new Error('Already failed with that worker'));
     }
 
-    this.tasksToRun.push({key, data});
     this.logger.info('Task ("%s") run scheduled', key);
     this.logger.debug('Task ("%s") run scheduled with "%j"', key, data);
 
-    if (this.taskRunning >= this.opts.maxWorker) {
-      return;
-    }
+    return new Promise((resolve, reject) => {
+      this.taskQueue.push({key, data}, (err, result) => {
+        if (err) {
+          return reject(err);
+        }
 
-    this.runTask(this.tasksToRun.shift());
+        resolve(result);
+      });
+    });
   }
 
   /**
-   * Async. run a task until the queue is empty.
+   * Process a task.
    *
    * @param  {Object} task Task key and body.
    * @return {Promise}     Resolve when the queue is empty.
    */
   runTask(task) {
-    if (!task) {
-      return Promise.resolve();
+    if (
+      !task ||
+      !task.key ||
+      !task.data ||
+      !task.data.payload
+    ) {
+      return Promise.reject(new Error('Unvalid task'));
     }
 
     const skip = {};
 
-    this.taskRunning++;
     return this.claimTask(task).catch(
       () => Promise.reject(skip)
     ).then(
@@ -324,6 +344,7 @@ module.exports = class Queue extends events.EventEmitter {
     ).then(results => {
       this.logger.info('Task ("%s") run.', task.key);
       this.logger.debug('Task ("%s") run: "%j".', task.key, results);
+
       return this.saveTaskResults(task, results);
     }).catch(err => {
       if (err === skip) {
@@ -331,16 +352,9 @@ module.exports = class Queue extends events.EventEmitter {
       }
 
       this.logger.info('Task ("%s") failed running: %s.\n%s', task.key, err.toString(), err.stack);
-      return this.removeTaskClaim(task);
-    }).then(
-      // Regardless of promise settlement, recover and decrease task running count.
-      () => this.taskRunning--,
-      () => this.taskRunning--
-    ).then(
-      () => this.runTask(this.tasksToRun.shift())
-    ).catch(err => {
+      return this.removeTaskClaim(task).then(() => Promise.reject(err));
+    }).catch(err => {
       this.logger.error(err);
-
       return Promise.reject(err);
     });
   }
@@ -426,9 +440,10 @@ module.exports = class Queue extends events.EventEmitter {
       promiseReturn = this.savePullTaskResults(task, results);
     }
 
-    return promiseReturn.then(
-      () => this.logger.info('Task ("%s") results saved.', task.key)
-    ).catch(err => {
+    return promiseReturn.then(() => {
+      this.logger.info('Task ("%s") results saved.', task.key);
+      return results;
+    }).catch(err => {
       this.logger.error('Failed to save task results ("%s"): %s', task.key, err);
       return Promise.reject(err);
     });
@@ -496,7 +511,9 @@ module.exports = class Queue extends events.EventEmitter {
       [`${taskPath}/completedAt`]: Firebase.ServerValue.TIMESTAMP,
       [`${taskPath}/completed`]:true,
       [`${taskPath}/consumed`]:true
-    });
+    }).then(
+      () => results
+    );
   }
 
   /**
@@ -517,7 +534,9 @@ module.exports = class Queue extends events.EventEmitter {
       results: results,
       completedAt: Firebase.ServerValue.TIMESTAMP,
       completed: true
-    });
+    }).then(
+      () => results
+    );
   }
 
   /**
@@ -532,8 +551,18 @@ module.exports = class Queue extends events.EventEmitter {
       return Promise.reject(new Error('The user is not logged in as a worker for this queue'));
     }
 
-    this.tasksToRun.reset();
-    return Promise.resolve();
+    return new Promise((resolve) => {
+      this.taskQueue.kill();
+
+      if (this.taskQueue.idle()) {
+        return resolve();
+      }
+
+      this.taskQueue.drain = () => {
+        resolve();
+        this.taskQueue.drain = noop;
+      };
+    });
   }
 
   /**
@@ -545,32 +574,46 @@ module.exports = class Queue extends events.EventEmitter {
    *
    * @return {Function} function to cancel monitoring
    */
-  monitorWorkers() {
+  monitorWorkers(failureHandler, opts) {
     let cancelWorkerWatch = noop;
     let cancelTaskWatch = noop;
 
+    opts = opts || {};
+
+    const debounce = opts.debounce || lodashDebounce;
     const presenceRef = this.workersRef.child(this.authData.uid).child('presence');
     const presenceHandler = presenceRef.on('value', debounce(snapshot => {
       const now = snapshot.val();
       this.logger.debug('Presence Time: %s', new Date(now));
 
       cancelWorkerWatch();
-      cancelWorkerWatch = this.removeWorker(now - 2 * this.opts.presenceDelay);
+      cancelWorkerWatch = this.removeWorkers(now - 2 * this.opts.presenceDelay, failureHandler);
 
       cancelTaskWatch();
-      cancelTaskWatch = this.removeTaskClaims(now - 2 * this.opts.taskTimeout);
+      cancelTaskWatch = this.removeTaskClaims(now - 2 * this.opts.taskTimeout, failureHandler);
 
-    }, 1000));
+    }, 1000), failureHandler);
 
     return () => {
-      presenceRef.off('value', presenceHandler);
-      cancelWorkerWatch();
-      cancelTaskWatch();
+      [
+        () => presenceRef.off('value', presenceHandler),
+        cancelWorkerWatch,
+        cancelTaskWatch
+      ].forEach(fn => {
+        try {
+          fn();
+        } catch (e) {
+          this.logger.error(e.toString());
+        }
+      });
     };
   }
 
-  removeWorker(olderThan) {
+  removeWorkers(olderThan, onQueryFailure, onRemovalError) {
     this.logger.debug('Removing worker older than %s...', new Date(olderThan));
+
+    onQueryFailure = onQueryFailure || noop;
+    onRemovalError = onRemovalError || noop;
 
     const query = this.workersRef.orderByChild('presence').endAt(olderThan).limitToFirst(1);
     const handler = query.on('child_added', snapshot => {
@@ -581,16 +624,17 @@ module.exports = class Queue extends events.EventEmitter {
       snapshot.ref().remove(err => {
         if (err) {
           this.logger.error('Failed to remove worker "%s": %s', key, err.toString());
+          onRemovalError(err);
         } else {
           this.logger.info('Worker "%s" removed', key);
         }
       });
-    });
+    }, onQueryFailure);
 
     return () => query.off('child_added', handler);
   }
 
-  removeTaskClaims(claimedBefore) {
+  removeTaskClaims(claimedBefore, onQueryFailure) {
     this.logger.debug('Removing claims on task older than %s...', new Date(claimedBefore));
 
     const query = this.tasksRef.orderByChild('completed').equalTo(false);
@@ -602,9 +646,10 @@ module.exports = class Queue extends events.EventEmitter {
       }
 
       const key = snapshot.key();
+
       this.logger.debug('Removing old claim on %s...', key);
       this.removeTaskClaim({key});
-    });
+    }, onQueryFailure);
 
     return () => query.off('child_added', handler);
   }

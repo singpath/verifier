@@ -1223,6 +1223,65 @@ describe('queue', () => {
 
   });
 
+  describe('removeTaskClaims', () => {
+    let query, snapshot, onFailure;
+
+
+    beforeEach(() => {
+      sinon.stub(queue, 'removeTaskClaim');
+      onFailure = sinon.spy();
+
+      snapshot = (key, startedAt) => {
+        const data = {
+          started: !!startedAt,
+          startedAt : startedAt || null
+        };
+
+        return {
+          val: () => data,
+          key: () => key
+        };
+      };
+      query = {
+        equalTo: sinon.stub().withArgs(false).returnsThis(),
+        on: sinon.stub().returnsArg(1),
+        off: sinon.stub()
+      };
+      queue.tasksRef.orderByChild = sinon.stub().withArgs('completed').returns(query);
+    });
+
+    it('should query pending tasks', () => {
+      queue.removeTaskClaims(12345, onFailure);
+      sinon.assert.calledOnce(query.equalTo);
+      sinon.assert.calledOnce(query.on);
+      sinon.assert.calledWithExactly(
+        query.on, 'child_added', sinon.match.func, onFailure
+      );
+    });
+
+    it('should remove old claims', () => {
+      queue.removeTaskClaims(12345);
+      query.on.callArgWith(1, snapshot('key1'));
+      query.on.callArgWith(1, snapshot('key2', 12344));
+      query.on.callArgWith(1, snapshot('key3', 12343));
+      query.on.callArgWith(1, snapshot('key4', 12346));
+
+      sinon.assert.calledTwice(queue.removeTaskClaim);
+      sinon.assert.calledWithExactly(queue.removeTaskClaim, sinon.match({key: 'key2'}));
+      sinon.assert.calledWithExactly(queue.removeTaskClaim, sinon.match({key: 'key3'}));
+    });
+
+    it('should let the watch be cancelled', () => {
+      const cancel = queue.removeTaskClaims(12345);
+      const handler = query.on.lastCall.args[1];
+
+      cancel();
+      sinon.assert.calledOnce(query.off, handler);
+      sinon.assert.calledOnce(query.off, 'child_added', handler);
+    });
+
+  });
+
 });
 
 

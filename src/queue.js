@@ -627,7 +627,7 @@ module.exports = class Queue extends events.EventEmitter {
     return () => query.off('child_added', handler);
   }
 
-  removeTaskClaims(claimedBefore, failureHandler) {
+  removeTaskClaims(claimedBefore, onQueryFailure) {
     this.logger.debug('Removing claims on task older than %s...', new Date(claimedBefore));
 
     const query = this.tasksRef.orderByChild('completed').equalTo(false);
@@ -639,9 +639,10 @@ module.exports = class Queue extends events.EventEmitter {
       }
 
       const key = snapshot.key();
+
       this.logger.debug('Removing old claim on %s...', key);
       this.removeTaskClaim({key});
-    }, failureHandler);
+    }, onQueryFailure);
 
     return () => query.off('child_added', handler);
   }

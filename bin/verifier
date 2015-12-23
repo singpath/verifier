@@ -9,7 +9,7 @@ const Firebase = require('firebase');
 const FirebaseTokenGenerator = require('firebase-token-generator');
 const path = require('path');
 const prompt = require('prompt');
-const spawn = require('child_process').spawn;
+const childProcess = require('child_process');
 const url = require('url');
 const yaml = require('js-yaml');
 
@@ -518,7 +518,7 @@ function buildImage(image, tag, logger) {
       stdio: 'inherit',
       cwd: path.resolve(__dirname, '../')
     };
-    const docker = spawn(
+    const docker = childProcess.spawn(
       'docker',
       ['build', '-t', `${image.name}:${tag}`, image.path],
       options
@@ -547,7 +547,7 @@ function pullImage(image, tag) {
       stdio: 'inherit',
       cwd: path.resolve(__dirname, '../')
     };
-    const docker = spawn(
+    const docker = childProcess.spawn(
       'docker',
       ['pull', `${image.name}:${tag}`],
       options

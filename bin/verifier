@@ -341,12 +341,12 @@ function camelCaseObject(obj) {
   }, {});
 }
 
-function singpathQueue(args, logger) {
-  const fbClient = new Firebase(args.firebaseQueue);
-  const imageTag = args.imageTag;
-  const maxWorker = args.maxWorker;
+function singpathQueue(opts, logger) {
+  const fbClient = new Firebase(opts.firebaseQueue);
+  const imageTag = opts.imageTag;
+  const maxWorker = opts.maxWorker;
 
-  return verifier.dockerClient(args).then(
+  return verifier.dockerClient(opts).then(
     client => verifier.singpathQueue(
       fbClient, client, {logger, imageTag, maxWorker}
     )

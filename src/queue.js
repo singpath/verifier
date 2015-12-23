@@ -233,7 +233,7 @@ module.exports = class Queue extends events.EventEmitter {
         this.logger.info('Watch on new task stopped.');
 
         return Promise.all([
-          deregister, stopWorkerWatch, stopPendingTaskWatch
+          deregister, stopWorkerWatch, stopPendingTaskWatch, () => this.reset()
         ].map(fn => {
           try {
             return fn();

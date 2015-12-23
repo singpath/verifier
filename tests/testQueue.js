@@ -309,6 +309,7 @@ describe('queue', () => {
       sinon.stub(queue, 'registerWorker').returns(Promise.resolve(deregister));
       sinon.stub(queue, 'monitorWorkers').returns(stopWatchOnWorker);
       sinon.stub(queue, 'monitorPendingTask').returns(monitorPendingTask);
+      sinon.stub(queue, 'reset').returns(Promise.resolve());
     });
 
     it('should register the worker', () => {
@@ -405,6 +406,27 @@ describe('queue', () => {
         queue.watch().then(cancel => {
           return cancel();
         });
+      });
+
+      it('should reset the in-memory queue', () => {
+        return queue.watch().then(cancel => {
+          return cancel();
+        }).then(
+          () => sinon.assert.calledOnce(queue.reset)
+        );
+      });
+
+      it('should reject if reset rejected', () => {
+        const err = new Error();
+
+        queue.reset.returns(Promise.reject(err));
+
+        return queue.watch().then(cancel => {
+          return cancel();
+        }).then(
+          unexpected,
+          e => expect(e).to.be(err)
+        );
       });
 
     });

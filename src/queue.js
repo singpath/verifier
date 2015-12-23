@@ -189,7 +189,7 @@ module.exports = class Queue extends events.EventEmitter {
       this.workersRef.child(this.authData.uid).child('presence'),
       Firebase.ServerValue.TIMESTAMP
     ).then(
-      () => this.logger.info('Worker presence updated')
+      () => this.logger.debug('Worker presence updated')
     ).catch(err => {
       this.logger.error('Failed to update worker presence: %s', err.toString());
       return Promise.reject(err);

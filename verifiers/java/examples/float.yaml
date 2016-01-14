@@ -7,7 +7,7 @@ tests: |
 
   public class SingPathTest extends SolutionRunner {
     @Test
-    public void testCapitalize() throws Exception {
+    public void testSolution() throws Exception {
       SingPath sp = new SingPath();
       assertEquals(2.0, sp.add());
     }

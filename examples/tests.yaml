@@ -62,7 +62,7 @@ tests: |
   public class SingPathTest extends SolutionRunner {
 
     @Test
-    public void testCapitalize() throws Exception {
+    public void testSolution() throws Exception {
       SingPath sp = new SingPath();
       assertEquals(4.0, sp.add(2.0, 2.0));
     }
@@ -92,7 +92,7 @@ tests: |
   public class SingPathTest extends SolutionRunner {
 
     @Test
-    public void testCapitalize() throws Exception {
+    public void testSolution() throws Exception {
       SingPath sp = new SingPath();
       assertEquals(4.0, sp.add(2.0, 2.0));
     }

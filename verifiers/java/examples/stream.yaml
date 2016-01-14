@@ -1,0 +1,34 @@
+---
+tests: |
+  import java.util.*; //Arrays, Map, List
+
+  import org.junit.Test;
+  import static org.junit.Assert.*;
+  import junit.framework.*;
+  import com.singpath.SolutionRunner;
+
+  public class SingPathTest extends SolutionRunner {
+
+      @Test
+      public void testCapitalize() throws Exception {
+          SingPath one = new SingPath();
+
+          List<String> input = Arrays.asList("c2", "a5", "A3", "b1", "c1");;
+          List<String> expected = Arrays.asList("C2", "A5", "A3", "B1", "C1");
+
+          assertEquals(expected, one.capitalize(input));
+      }
+  }
+solution: |
+  import java.util.*; //Arrays, Map, List
+  import java.util.stream.*; //Stream, IntStream, Collectors;
+
+  public class SingPath {
+
+      public List<String> capitalize(List<String> myList) {
+          List<String> result = myList.stream()
+              .map(s -> s.toUpperCase())
+              .collect(Collectors.toList());
+          return result;
+      }
+  }

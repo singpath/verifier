@@ -1,7 +1,17 @@
 ---
 tests: |
-  SingPath sp = new SingPath();
-  assertEquals(2.0, sp.add());
+  import org.junit.Test;
+  import static org.junit.Assert.*;
+  import junit.framework.*;
+  import com.singpath.SolutionRunner;
+
+  public class SingPathTest extends SolutionRunner {
+    @Test
+    public void testCapitalize() throws Exception {
+      SingPath sp = new SingPath();
+      assertEquals(2.0, sp.add());
+    }
+  }
 solution: |
   public class SingPath {
     public Double add() {

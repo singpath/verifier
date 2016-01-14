@@ -14,18 +14,7 @@ import java.nio.charset.Charset;
 public class SolutionRunner extends TestCase {
     public static final String SOLUTION_CLASS_NAME = "SingPath";
     public static final String TEST_CLASS_NAME = "SingPathTest";
-    public static final String TEST_TEMPLATE = "import org.junit.Test;\n" +
-            "import static org.junit.Assert.*;\n" +
-            "import junit.framework.*;\n" +
-            "import com.singpath.SolutionRunner;\n" +
-            "\n" +
-            "public class SingPathTest extends SolutionRunner {\n" +
-            "\n" +
-            "    @Test\n" +
-            "    public void testSolution() throws Exception {\n" +
-            "        %s\n" +
-            "    }\n" +
-            "}";
+
     public static String errCompileError = "Internal error";
 
     public static Response runRequest(Request req) {
@@ -35,7 +24,7 @@ public class SolutionRunner extends TestCase {
         boolean success = compiler.compile(
                 new BufferedWriter(new OutputStreamWriter(out)),
                 new StringJavaSource(SOLUTION_CLASS_NAME, req.getSolution()),
-                new StringJavaSource(TEST_CLASS_NAME, String.format(TEST_TEMPLATE, req.getTests()))
+                new StringJavaSource(TEST_CLASS_NAME, req.getTests())
         );
 
         if (!success) {

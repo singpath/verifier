@@ -13,12 +13,23 @@ public class VerifierTest {
         Request req = new Request(
                 "\n"
                         + "public class SingPath {\n"
-                        + "   public Double add() {\n"
-                        + "      return 2.0;\n"
-                        + "   }\n"
+                        + "  public Double add() {\n"
+                        + "    return 2.0;\n"
+                        + "  }\n"
                         + "} \n",
-                "SingPath sp = new SingPath();\n"
-                        + "assertEquals(2.0, 2.0);"
+                 "import org.junit.Test;\n"
+                        + "import static org.junit.Assert.*;\n"
+                        + "import junit.framework.*;\n"
+                        + "import com.singpath.SolutionRunner;\n"
+                        + "\n"
+                        + "public class SingPathTest extends SolutionRunner {\n"
+                        + "\n"
+                        + "  @Test\n"
+                        + "  public void testSolution() throws Exception {\n"
+                        + "    SingPath sp = new SingPath();\n"
+                        + "    assertEquals(2.0, 2.0);\n"
+                        + "  }\n"
+                        + "}"
         );
         Response resp = Verifier.process(req);
 
@@ -27,27 +38,4 @@ public class VerifierTest {
 
         assertEquals(true, solved);
     }
-
-//    @Test
-//    public void testProcessVarArgs() throws Exception {
-//        Request req = new Request(
-//                "import java.util.*;\n" +
-//                        "import java.util.stream.*;\n" +
-//                        "\n" +
-//                        "public class SingPath {\n" +
-//                        "   public long add() {\n" +
-//                        "     long count = Arrays.asList(1,2,3).stream().count();\n" +
-//                        "     return count;\n" +
-//                        "   }\n" +
-//                        "} \n",
-//                "SingPath sp = new SingPath();\n"
-//                        + "assertEquals(3, sp.add());"
-//        );
-//        Response resp = Verifier.process(req);
-//
-//        JSONObject dict = (JSONObject) JSONValue.parse(resp.toString());
-//        boolean solved = (boolean) dict.get("solved");
-//
-//        assertEquals(true, solved);
-//    }
 }

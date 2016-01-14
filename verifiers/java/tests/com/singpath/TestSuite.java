@@ -11,5 +11,4 @@ import org.junit.runners.Suite;
         ResponseTest.class,
         VerifierTest.class
 })
-public class TestSuite {
-}
+public class TestSuite {}

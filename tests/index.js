@@ -2,6 +2,7 @@
 
 
 require('./testAuth');
+require('./testBenchmark');
 require('./testFirebase');
 require('./testPromiseFs');
 require('./testQueue');

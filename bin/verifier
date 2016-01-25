@@ -16,6 +16,7 @@ const yaml = require('js-yaml');
 const fs = require('../src/promiseFs');
 const packageJson = require('../package.json');
 const verifier = require('../');
+const benchmark = require('../src/benchmark');
 
 const ERROR_NO_ENDPOINT = 'A queue path is required.';
 const ERROR_NO_SECRET = 'A firebase auth secret is required.';
@@ -26,7 +27,8 @@ const HINT_AUTH_SECRET = 'A Firebase auth secret can be found at https://%s.fire
 const DEFAULT_SETTINGS = {
   firebaseQueue: 'https://singpath-play.firebaseio.com/singpath/queues/default',
   maxWorker: 10,
-  imageTag: 'latest'
+  imageTag: 'latest',
+  payloadCount: 20
 };
 
 const EPILOG = `Environment variables:
@@ -220,6 +222,45 @@ const CMDS = [{
       process.exit(133);
     });
   }
+}, {
+  name: 'benchmark',
+  description: 'Fill a queue with tasks and caculate duration to run them',
+
+  options(parser, defaults) {
+    commonOptions(parser, defaults);
+
+    parser.addArgument(['-c', '--payload-count'], {
+      help: 'Number of tasks to create\n(default: %(defaultValue)s)',
+      type: 'int',
+      defaultValue: defaults.payloadCount
+    });
+
+    parser.addArgument(['--payload'], {
+      help: (
+        'YAML encoded payload; \n' +
+        'each solution must include `language`, `tests`, `solution` and `expected`; \n' +
+        '`expected` must match the result of the verifier.'
+      )
+    });
+
+  },
+
+  cmd(opts, logger) {
+    const payloads = opts.payload && loadSolutions(opts.payload, {logger});
+    const length = opts.payloadCount;
+    const queueId = queueName(opts.firebaseQueue);
+    const firebase = verifier.firebase.factory(firebaseId(opts.firebaseQueue));
+    const singpath = verifier.singpath.create(firebase);
+
+    return requireSecret(opts, logger).then(() => {
+      const generator = new FirebaseTokenGenerator(opts.firebaseSecret);
+      const auth = verifier.auth(generator, opts.debug);
+
+      return singpath.auth.login(auth.user('benchmark'));
+    }).then(
+      () => benchmark.run(singpath, {payloads, length, queueId, logger})
+    );
+  }
 }];
 
 
@@ -412,6 +453,14 @@ function firebaseId(firebaseQueue) {
   }
 
   return parsedUrl.hostname.split('.', 1).pop();
+}
+
+function queueName(firebaseQueue) {
+  if (!firebaseQueue) {
+    throw new Error(ERROR_NO_ENDPOINT);
+  }
+
+  return firebaseQueue.split('/').pop();
 }
 
 function watch(q, auth, logger) {

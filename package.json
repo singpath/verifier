@@ -9,9 +9,9 @@
     "verifier": "./bin/verifier"
   },
   "scripts": {
-    "cover": "istanbul cover ./node_modules/mocha/bin/_mocha tests --report lcov -- -R spec",
-    "coveralls": "istanbul cover ./node_modules/mocha/bin/_mocha tests --report lcovonly -- -R spec && cat ./coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js && rm -rf ./coverage",
-    "test": "eslint src/ tests/ && mocha tests",
+    "cover": "istanbul cover ./node_modules/mocha/bin/_mocha tests/index.js --report lcov -- -R spec",
+    "coveralls": "istanbul cover ./node_modules/mocha/bin/_mocha tests/index.js --report lcovonly -- -R spec && cat ./coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js && rm -rf ./coverage",
+    "test": "eslint src/ tests/ && mocha tests/index.js",
     "lint": "eslint src/ tests/"
   },
   "author": "",
@@ -21,7 +21,7 @@
     "async": "^1.5.0",
     "deep-diff": "^0.3.3",
     "dockerode": "^2.2.3",
-    "firebase": "^2.3.1",
+    "firebase": "^2.4.0",
     "firebase-token-generator": "^2.0.0",
     "js-yaml": "^3.4.3",
     "lodash.camelcase": "^3.0.1",
@@ -29,6 +29,7 @@
     "lodash.once": "^3.0.1",
     "node-uuid": "^1.4.3",
     "prompt": "^0.2.14",
+    "rx-lite": "^4.0.7",
     "singpath-logger": "github:singpath/singpath-logger"
   },
   "devDependencies": {

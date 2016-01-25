@@ -258,6 +258,10 @@ const CMDS = [{
 
       return singpath.auth.login(auth.user('benchmark'));
     }).then(
+      () => singpath.auth.status().filter(auth => !!auth).take(1).toPromise().then(
+        auth => logger.debug('auth: %j', auth)
+      )
+    ).then(
       () => benchmark.run(singpath, {payloads, length, queueId, logger})
     );
   }

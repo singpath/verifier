@@ -270,8 +270,8 @@ if (require.main === module) {
 
 
 function main() {
-  fileSettings('./.singpathrc', DEFAULT_SETTINGS).then(
-    settings => envSettings(settings)
+  envSettings(DEFAULT_SETTINGS).then(
+    settings => fileSettings('./.singpathrc', settings)
   ).then(
     settings => parseArgs(settings)
   ).then(opts => {
@@ -284,10 +284,13 @@ function main() {
     }
 
     return opts.func(opts, verifier.logger({level}));
-  }).catch( err => {
-    console.error('Unexpected error: %s\n\n%s', err, err.stack);
-    process.exit(1);
-  });
+  }).then(
+    () => process.exit(0),
+    err => {
+      console.error('Unexpected error: %s\n\n%s', err, err.stack);
+      process.exit(1);
+    }
+  );
 }
 
 function parseArgs(defaults, args) {
@@ -366,13 +369,13 @@ function fileSettings(settingPath, defaults) {
 function envSettings(defaults) {
   const prefix = 'SINGPATH_';
 
-  return Object.keys(process.env).filter(
+  return Promise.resolve(Object.keys(process.env).filter(
     key => key.startsWith(prefix)
   ).reduce((settings, envKey) => {
     const key = camelCase(envKey.slice(prefix.length).toLowerCase());
     settings[key] = process.env[envKey];
     return settings;
-  }, defaults);
+  }, defaults));
 }
 
 function camelCaseObject(obj) {

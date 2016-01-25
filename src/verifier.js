@@ -4,7 +4,7 @@ const Writable = require('stream').Writable;
 
 const verifierImages = require('../images.json');
 
-const DELAY = 6000;
+const DELAY = 10000;
 
 /**
  * Writeable stream collecting verifier sdtout stream.

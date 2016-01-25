@@ -11,12 +11,14 @@ describe('benchmark', () => {
 
   beforeEach(() => {
     singpath = {
+      $firebase: sinon.stub().returns(''),
       queues: {
         pushTasks: sinon.stub().returns(Promise.resolve([])),
         consumeTasks: sinon.stub().returns(Promise.resolve([]))
       }
     };
     logger = {
+      debug: sinon.stub(),
       info: sinon.stub()
     };
   });

@@ -14,36 +14,27 @@ const VALID_ID = /^[-0-9a-zA-Z]{2,}$/;
 
 const ERR_INVALID_ID = 'Invalid Firebase id.';
 
+Firebase.prototype.observe = function(eventType) {
+  return Rx.Observable.create(observer => {
+    const handler = snapshot => observer.onNext(snapshot);
+    const onError = err => observer.onError(err);
 
-/**
- * Firebase service.
- *
- * Extends Firebase to add a an `observe` method, equivalent to `on` but
- * returning a RxJS observable.
- *
- */
-exports.RxFirebase = class RxFirebase extends Firebase {
+    this.on(eventType, handler, onError);
 
-  observe(eventType) {
-    return Rx.Observable.create(observer => {
-      const handler = snapshot => observer.onNext(snapshot);
-      const onError = err => observer.onError(err);
-
-      this.on(eventType, handler, onError);
-
-      return () => this.off(eventType, handler);
-    });
-  }
-
-  observeAuth() {
-    return Rx.Observable.fromEventPattern(
-      handler => this.onAuth(handler),
-      handler => this.offAuth(handler)
-    ).startWith(
-      this.getAuth()
-    );
-  }
+    return () => this.off(eventType, handler);
+  });
 };
+
+Firebase.prototype.observeAuth = function() {
+  return Rx.Observable.fromEventPattern(
+    handler => this.onAuth(handler),
+    handler => this.offAuth(handler)
+  ).startWith(
+    this.getAuth()
+  );
+};
+
+exports.RxFirebase = Firebase;
 
 
 /**
@@ -86,7 +77,10 @@ exports.factory = function firebaseFactory(id) {
    */
   return function firebase(path) {
     const components = path ? [rootPath].concat(path) : [rootPath];
+    const ref = new exports.RxFirebase(components.join('/'));
 
-    return new exports.RxFirebase(components.join('/'));
+    ref.ServerValue = Firebase.ServerValue;
+
+    return ref;
   };
 };

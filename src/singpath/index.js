@@ -20,6 +20,7 @@ const queues = require('./queues');
 exports.Singpath = class Singpath {
 
   constructor(firebase) {
+    this.$firebase = firebase;
     this.auth = new auth.Auth(firebase);
     this.queues = new queues.Queues(firebase, this.auth);
   }

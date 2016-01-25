@@ -63,11 +63,13 @@ exports.run = function runBenchmark(singpath, options) {
 
   const logger = options.logger || console;
 
+  logger.info('creating %s payloads in queue %s...', length, options.queueId);
+  logger.debug('Root: %s', singpath.$firebase().toString());
+  logger.debug('Solutions: %j', samples);
+
   for (let i = 0; i < length; i++) {
     payloads[i] = samples[i % sampleSize];
   }
-
-  logger.info('creating %s payloads...', length);
 
   return singpath.queues.pushTasks(payloads, options.queueId).then(refs => {
     logger.info('Tasks created.');

@@ -24,7 +24,7 @@ exports.Queues = class Queues {
   }
 
   _tasksRef(queueId) {
-    return this.$firebase(['queues', queueId, 'tasks']);
+    return this.$firebase(['singpath/queues', queueId, 'tasks']);
   }
 
   _pushTask(payload, uid, tasksRef) {

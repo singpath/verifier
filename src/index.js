@@ -8,6 +8,7 @@ const images = require('../images.json');
 const Queue = require('./queue');
 const verifier = require('./verifier');
 const firebase = require('./firebase');
+const singpath = require('./singpath/index');
 
 
 exports.auth = auth;
@@ -17,6 +18,7 @@ exports.singpathQueue = singpathQueue;
 exports.verify = verifier.verify;
 exports.images = images;
 exports.firebase = firebase;
+exports.singpath = singpath;
 
 /**
  * Singpath Task queue

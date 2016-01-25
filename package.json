@@ -9,9 +9,9 @@
     "verifier": "./bin/verifier"
   },
   "scripts": {
-    "cover": "istanbul cover ./node_modules/mocha/bin/_mocha tests --report lcov -- -R spec",
-    "coveralls": "istanbul cover ./node_modules/mocha/bin/_mocha tests --report lcovonly -- -R spec && cat ./coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js && rm -rf ./coverage",
-    "test": "eslint src/ tests/ && mocha tests",
+    "cover": "istanbul cover ./node_modules/mocha/bin/_mocha tests/index.js --report lcov -- -R spec",
+    "coveralls": "istanbul cover ./node_modules/mocha/bin/_mocha tests/index.js --report lcovonly -- -R spec && cat ./coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js && rm -rf ./coverage",
+    "test": "eslint src/ tests/ && mocha tests/index.js",
     "lint": "eslint src/ tests/"
   },
   "author": "",

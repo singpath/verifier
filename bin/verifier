@@ -89,11 +89,14 @@ const CMDS = [{
         process.exit(0);
       });
 
-      return watch(q, auth, logger).then(c => {
+      watch(q, auth, logger).then(c => {
         cancel = c;
         process.on('SIGTERM', () => cancel());
         process.on('SIGINT', () => cancel());
       });
+
+      // We will manage the exit
+      return new Promise(() => undefined);
     });
   }
 }, {

@@ -230,7 +230,12 @@ function containerOptions(payload, tag) {
     'HostConfig': {
       'CapDrop': ['All'],
       'NetworkMode': 'none',
-      'LogConfig': { 'Type': 'syslog', 'Config': {} }
+      'LogConfig': {
+        'Type': 'syslog',
+        'Config': {
+          'tag': `'verifier-${payload.language}'`
+        }
+      }
     }
   };
 }

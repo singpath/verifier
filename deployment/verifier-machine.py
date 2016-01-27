@@ -62,11 +62,10 @@ cat /etc/group | grep "^$DOCKER_GROUP_NAME" | cut -d: -f3
 def main():
     settings = Settings()
     args = settings.parse_args()
-    print('1st parsing:', args)
+
     if args.profile_id:
         settings.load(args.profile_id)
         args = settings.parse_args()
-        print('with settings:', args)
 
     logging.basicConfig(
         format='%(asctime)s - %(message)s', level=args.level
@@ -353,7 +352,7 @@ def stop(opts):
         exit(128)
 
     container_name = 'verifier-%s' % opts.profile_id
-    cmd = ['docker', 'rm', 'f', container_name]
+    cmd = ['docker', 'rm', '-f', container_name]
     logging.info(
         'Stopping verifier container (named "%s")...',
         container_name

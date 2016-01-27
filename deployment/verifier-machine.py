@@ -310,13 +310,14 @@ def start(opts):
         '-e', 'SINGPATH_MAX_WORKER=%s' % opts.max_worker,
         '-e', 'SINGPATH_IMAGE_TAG=%s' % opts.verifier_tag,
         '-e', 'SKIP_BUILD=0',
-        'singpath/verifier2'
+        'singpath/verifier2',
+        '/app/bin/verifier'
     ]
 
-    if opts.debug:
-        cmd.push('-d')
+    if opts.level == logging.DEBUG:
+        cmd.append('-d')
 
-    cmd.push('run')
+    cmd.append('run')
 
     if not opts.interactive:
         cmd.remove('--rm')
@@ -385,7 +386,8 @@ def push(opts):
         '-e', 'SINGPATH_FIREBASE_QUEUE=%s' % queue_url,
         '-e', 'SINGPATH_IMAGE_TAG=%s' % opts.verifier_tag,
         '-e', 'SKIP_BUILD=0',
-        'singpath/verifier2', '/app/bin/verifier', 'push', opts.payload
+        'singpath/verifier2',
+        '/app/bin/verifier', 'push', opts.payload
     ]
 
     try:

@@ -74,7 +74,7 @@ for many VM provider. We will use the Google Cloud Engine in this example.
 
 3. Download the verifier client:
     ```shell
-    curl -O https://raw.githubusercontent.com/singpath/verifier/master/verifier-machine.py
+    curl -O https://raw.githubusercontent.com/singpath/verifier/master/deployment/verifier-machine.py
     chmod +x verifier-machine.py
     ```
 

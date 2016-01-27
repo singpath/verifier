@@ -12,17 +12,16 @@ master get a new commit or merge a new pull request.
 - [git](https://git-scm.com/);
 - nodejs 4; you can use [nvm](https://github.com/creationix/nvm) to manage
   multiple versions of node.
-- bash;
-- make;
+- bash.
 
-OS X includes git, make and bash. The git package for windows should include
-bash and make.
+OS X includes git and bash. The git package for windows should include
+bashe.
 
 On OS X and Windows, you should install
 [Docker Tools](https://www.docker.com/docker-toolbox); it will include
 docker, docker-machine and VirtualBox.
 
-To create new docker machine if you have:
+To create new docker machine:
 ```shell
 docker-machine create -d virtualbox default
 ```
@@ -42,8 +41,8 @@ eval $(docker-machine env default)
 
 Clone the repository and install node dependencies:
 ```shell
-git clone https://github.com/ChrisBoesch/singpath-verifiers.git
-cd singpath-verifiers.git
+git clone https://github.com/singpath/verifier.git
+cd verifier
 npm install
 ```
 

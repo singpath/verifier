@@ -80,12 +80,12 @@ for many VM provider. We will use the Google Cloud Engine in this example.
 
 4. Pull the verifier images:
     ```shell
-    ./verifier-machine pull latest
+    ./verifier-machine.py pull latest
     ```
 
 5. Setup a verifier profile:
     ```shell
-    ./verifier-machine init some-profile-name
+    ./verifier-machine.py init some-profile-name
     ```
     it saves a verifier settings in `./.singpath-verifiers.json` as a profile.
     `./.singpath-verifiers.json` can hold settings for verifier targeting
@@ -93,7 +93,7 @@ for many VM provider. We will use the Google Cloud Engine in this example.
 
 6. Start the verifier:
     ```shell
-    ./verifier-machine start \
+    ./verifier-machine.py start \
         --profile-id some-profile-name \
         --interactive
     ```

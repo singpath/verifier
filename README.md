@@ -80,7 +80,7 @@ for many VM provider. We will use the Google Cloud Engine in this example.
 
 4. Pull the verifier images:
     ```shell
-    ./verifier-machine.py pull latest
+    ./verifier-machine.py pull -t latest
     ```
 
 5. Setup a verifier profile:

@@ -1,7 +1,12 @@
 # Contributing
 
-The verifier docker image is automatically build by docker hub when
+The verifier docker images are automatically build by docker hub when
 master get a new commit or merge a new pull request.
+
+- The daemon image is define in `./Dockerfile`;
+- the daemon cli is define in `./bin/verifier` (Javascript);
+- the daemin library are define in `./src` (JavaScript);
+- the language specific verifier images are defined in [./verifiers](https://github.com/singpath/verifier/tree/master/verifiers).
 
 ## Development
 

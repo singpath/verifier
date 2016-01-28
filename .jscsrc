@@ -2,5 +2,7 @@
 	"preset": "google",
 	"excludeFiles": ["node_modules"],
 	"maximumLineLength": 120,
-	"disallowMultipleVarDecl": null
+	"disallowMultipleVarDecl": {
+		allExcept: ['undefined']
+	}
 }

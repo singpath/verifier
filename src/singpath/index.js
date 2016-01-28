@@ -10,7 +10,6 @@
 const auth = require('./auth');
 const queues = require('./queues');
 
-
 /**
  * Singpath service.
  *
@@ -26,6 +25,5 @@ exports.Singpath = class Singpath {
   }
 
 };
-
 
 exports.create = (firebase) => new exports.Singpath(firebase);

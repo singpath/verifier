@@ -4,7 +4,6 @@
 
 'use strict';
 
-
 // List function to convert firebase auth object to a flat auth object.
 const normalisers = {
   google(authData) {
@@ -50,7 +49,6 @@ function normaliseAuth(auth) {
 const authRefKey = Symbol('ref');
 const authStatusKey = Symbol('status');
 const authLoginKey = Symbol('login');
-
 
 /**
  * Authentication service.

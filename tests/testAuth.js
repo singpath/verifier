@@ -6,7 +6,6 @@ const uuid = require('node-uuid');
 
 const verifier = require('../');
 
-
 describe('auth', () => {
   let generator;
 

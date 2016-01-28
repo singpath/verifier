@@ -1,6 +1,5 @@
 'use strict';
 
-
 const DEFAULT_LENGTH = 20;
 const DEFAULT_PAYLOADS = [{
   language: 'javascript',
@@ -33,7 +32,6 @@ public class SingPath {
   }
 }`
 }];
-
 
 /**
  * Create solutions in a queue, wait for their completion and calculate the

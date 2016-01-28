@@ -10,7 +10,6 @@ const verifier = require('./verifier');
 const firebase = require('./firebase');
 const singpath = require('./singpath/index');
 
-
 exports.auth = auth;
 exports.dockerClient = () => Promise.resolve(new Docker());
 exports.logger = log;

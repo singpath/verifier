@@ -10,7 +10,6 @@ const verifierComponent = require('../src/verifier');
 const noop = () => undefined;
 const unexpected = () => Promise.reject(new Error('Unexpected'));
 
-
 describe('queue', () => {
   let firebaseClient, queue, dockerClient;
   let workersRef, singpathRef, tasksRef, someTaskRef, rootRef;
@@ -559,7 +558,6 @@ describe('queue', () => {
       workerRef = {child: sinon.stub().withArgs('presence').returns(presenceRef)};
       queue.workersRef.child = sinon.stub().withArgs('someWorker').returns(workerRef);
 
-
       cancelRemoveWorkers = sinon.stub();
       cancelRemoveTaskClaims = sinon.stub();
       sinon.stub(queue, 'removeWorkers').returns(cancelRemoveWorkers);
@@ -624,7 +622,6 @@ describe('queue', () => {
 
       queue.tasksRef.orderByChild = sinon.stub().returns(query);
     });
-
 
     it('should watch for any task opening', () => {
       queue.monitorPendingTask(failureHandler);
@@ -1256,7 +1253,6 @@ describe('queue', () => {
       queue.taskQueue.push([{}, {}, {}]);
     });
 
-
     it('should empty the in memory queue', () => {
       expect(queue.taskQueue.length()).to.be(3);
       queue.reset();
@@ -1356,7 +1352,6 @@ describe('queue', () => {
   describe('removeTaskClaims', () => {
     let query, snapshot, onFailure;
 
-
     beforeEach(() => {
       sinon.stub(queue, 'removeTaskClaim');
       onFailure = sinon.spy();
@@ -1413,7 +1408,6 @@ describe('queue', () => {
   });
 
 });
-
 
 function poll(fn, interval, timeout) {
   timeout = timeout || 2000;

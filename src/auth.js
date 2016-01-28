@@ -14,7 +14,6 @@ module.exports = function auth(generator, debug) {
      * Generate a custom auth token for a user
      *
      * @param  {String}  uid   optional user uid
-     * @param  {Boolean} debug debug rules
      * @return {String}        auth token
      */
     user(uid) {
@@ -28,7 +27,6 @@ module.exports = function auth(generator, debug) {
      * Generate a custom auth token for verifier worker.
      *
      * @param  {String} queueName queue name the worker is allow to work on.
-     * @param  {Boolean} debug    debug rules
      * @return {String}           auth token
      */
     worker(queueName) {

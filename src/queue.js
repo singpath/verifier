@@ -509,8 +509,8 @@ module.exports = class Queue extends events.EventEmitter {
       [`${solutionPath}/meta/verified`]: true,
       [`${solutionPath}/meta/solved`]: results.solved,
       [`${taskPath}/completedAt`]: Firebase.ServerValue.TIMESTAMP,
-      [`${taskPath}/completed`]:true,
-      [`${taskPath}/consumed`]:true
+      [`${taskPath}/completed`]: true,
+      [`${taskPath}/consumed`]: true
     }).then(
       () => results
     );
@@ -523,7 +523,7 @@ module.exports = class Queue extends events.EventEmitter {
    *
    * @param  {Object} task    Task key and data
    * @param  {Object} results Task results
-   * @return {[Promise}
+   * @return {Promise}
    */
   savePullTaskResults(task, results) {
     if (!this.isWorker()) {

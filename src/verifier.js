@@ -61,7 +61,6 @@ class Verifier {
    * Verifier constructor.
    *
    * @param  {dockerode.Container} container A container with TTY set to false.
-   * @return {Verifier}
    */
   constructor(container, logger) {
     this.container = container;
@@ -125,7 +124,7 @@ class Verifier {
    * Wait for the container to stop for up to the delay argument (in ms).
    *
    * @param  {number} delay
-   * @return {[type]}       Resolve when the container stop or reject when the
+   * @return {Promise}      Resolve when the container stop or reject when the
    *                        delay timeout, which ever first.
    */
   wait(delay) {

@@ -28,7 +28,7 @@ describe('queue', () => {
       update: sinon.stub().yields(null)
     };
 
-    rootRef = { child: sinon.stub() };
+    rootRef = {child: sinon.stub()};
     rootRef.child.withArgs('singpath').returns(singpathRef);
 
     someTaskRef = {
@@ -211,7 +211,7 @@ describe('queue', () => {
 
       payload = {};
 
-      newTaskRef = { set: sinon.stub().yields(null) };
+      newTaskRef = {set: sinon.stub().yields(null)};
       queue.tasksRef.push.returns(newTaskRef);
     });
 
@@ -253,8 +253,8 @@ describe('queue', () => {
     let workerRef, presenceRef;
 
     beforeEach(() => {
-      presenceRef = { set: sinon.stub().yields(null) };
-      workerRef = { child: sinon.stub().withArgs('presence').returns(presenceRef) };
+      presenceRef = {set: sinon.stub().yields(null)};
+      workerRef = {child: sinon.stub().withArgs('presence').returns(presenceRef)};
       queue.workersRef.child = sinon.stub().withArgs('someWorker').returns(workerRef);
     });
 
@@ -549,14 +549,14 @@ describe('queue', () => {
     beforeEach(() => {
       failCb = sinon.spy();
 
-      presenceSnapshot = { val: sinon.stub().returns(12345000)};
+      presenceSnapshot = {val: sinon.stub().returns(12345000)};
       presenceRef = {
         on: sinon.stub(),
         off: sinon.stub()
       };
       presenceRef.on.withArgs('value').yields(presenceSnapshot);
       presenceRef.on.withArgs('value').returnsArg(1);
-      workerRef = { child: sinon.stub().withArgs('presence').returns(presenceRef) };
+      workerRef = {child: sinon.stub().withArgs('presence').returns(presenceRef)};
       queue.workersRef.child = sinon.stub().withArgs('someWorker').returns(workerRef);
 
 
@@ -1120,10 +1120,10 @@ describe('queue', () => {
     let taskRef, task;
 
     beforeEach(() => {
-      taskRef = { update: sinon.stub().yields(null) };
+      taskRef = {update: sinon.stub().yields(null)};
       queue.tasksRef.child.withArgs('someTaskId').returns(taskRef);
 
-      task = { key: 'someTaskId' };
+      task = {key: 'someTaskId'};
     });
 
     it('should claimTask', () => {
@@ -1168,7 +1168,7 @@ describe('queue', () => {
     let taskRef, task;
 
     beforeEach(() => {
-      taskRef = { update: sinon.stub().yields(null) };
+      taskRef = {update: sinon.stub().yields(null)};
       queue.tasksRef.child.withArgs('someTaskId').returns(taskRef);
 
       task = {
@@ -1364,7 +1364,7 @@ describe('queue', () => {
       snapshot = (key, startedAt) => {
         const data = {
           started: !!startedAt,
-          startedAt : startedAt || null
+          startedAt: startedAt || null
         };
 
         return {

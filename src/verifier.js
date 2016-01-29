@@ -121,6 +121,15 @@ class Verifier {
   }
 
   /**
+   * Stop the container.
+   *
+   * @return {Promise} Resolve to the verifier once the the container is stopped.
+   */
+  stop() {
+    return this._wrapChain(this.container.stop, {});
+  }
+
+  /**
    * Wait for the container to stop for up to the delay argument (in ms).
    *
    * @param  {number} delay
@@ -133,7 +142,10 @@ class Verifier {
 
       const to = setTimeout(() => {
         hasTimedOut = true;
-        reject(new VerifierError('Timeout', this));
+        this.stop().then(
+          () => reject(new VerifierError('Timeout', this)),
+          () => reject(new VerifierError('Timeout', this))
+        );
       }, delay);
 
       this.container.wait((err) => {

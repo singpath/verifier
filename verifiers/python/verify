@@ -4,11 +4,12 @@
 #
 import argparse
 import json
-import yaml
 import logging
 import os
+import signal
 import subprocess
 import sys
+import yaml
 
 
 TIMEOUT = 5
@@ -52,10 +53,15 @@ def spawn(solution, tests=None):
         universal_newlines=True,
     )
 
+    def kill(*args, **kw):
+        proc.kill()
+
+    signal.signal(signal.SIGTERM, kill)
+
     try:
         out, _ = proc.communicate(timeout=TIMEOUT)
     except subprocess.TimeoutExpired:
-        proc.kill()
+        kill()
         logging.error('Code runner timed out')
         errors(TIMEOUT_ERROR)
         return

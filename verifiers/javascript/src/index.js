@@ -28,14 +28,16 @@ function testSolution(solution, tests, opts) {
     let out = '';
     let err = '';
     let resolved = false;
+
     const tester = spawn(process.execPath, [
       path.join(__dirname, '_runner.js'),
       '--solution', solution,
       '--tests', tests
     ]);
+    const stop = () => tester.kill('SIGKILL');
 
     let timeout = setTimeout(() => {
-      tester.kill('SIGTERM');
+      stop();
       timeout = null;
 
       if (resolved) {
@@ -45,6 +47,11 @@ function testSolution(solution, tests, opts) {
       resolved = true;
       resolve({solved: false, errors: 'timeout'});
     }, opts.timeout || 5000);
+    const cancelTimeout = () => {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    };
 
     tester.stdout.on('data', data => {
       out += data;
@@ -55,9 +62,7 @@ function testSolution(solution, tests, opts) {
     });
 
     tester.on('close', code => {
-      if (timeout) {
-        clearTimeout(timeout);
-      }
+      cancelTimeout();
 
       if (resolved) {
         return;
@@ -72,9 +77,7 @@ function testSolution(solution, tests, opts) {
     });
 
     tester.on('error', e => {
-      if (timeout) {
-        clearTimeout(timeout);
-      }
+      cancelTimeout();
 
       if (resolved) {
         return;
@@ -83,6 +86,8 @@ function testSolution(solution, tests, opts) {
       resolved = true;
       resolve({solved: false, errors: e.toString()});
     });
+
+    process.on('SIGTERM', stop);
   });
 }
 

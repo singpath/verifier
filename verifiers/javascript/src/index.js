@@ -136,7 +136,8 @@ function runSolution(solution, ctx) {
  * It will hold the properties defined by the user solution, `assert` and
  * `test`.
  *
- * @param {String} [varname] [description]
+ * @param {String} tests
+ * @param {String} ctx
  *
  */
 function initTests(tests, ctx) {

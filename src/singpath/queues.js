@@ -5,7 +5,6 @@
 
 const ERR_LOGGED_OFF = 'The user is not logged on';
 
-
 /**
  * Singpath Firebase Queue service.
  *

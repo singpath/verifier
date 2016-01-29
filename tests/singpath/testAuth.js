@@ -6,7 +6,6 @@ const sinon = require('sinon');
 
 const verifier = require('../../');
 
-
 describe('singpath/auth', () => {
   let firebase, singpath, ref, status;
 

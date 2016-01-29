@@ -10,7 +10,6 @@ const verifier = require('./verifier');
 const firebase = require('./firebase');
 const singpath = require('./singpath/index');
 
-
 exports.auth = auth;
 exports.dockerClient = () => Promise.resolve(new Docker());
 exports.logger = log;
@@ -21,7 +20,8 @@ exports.firebase = firebase;
 exports.singpath = singpath;
 
 /**
- * Singpath Task queue
+ * Singpath Task queue.
+ *
  * @param  {Firebase}  fbClient     Firebase object pointing the firebase queue.
  * @param  {Dockerode} dockerClient docker client.
  * @return {Queue}

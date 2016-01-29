@@ -1,6 +1,5 @@
 'use strict';
 
-
 require('./testAuth');
 require('./testBenchmark');
 require('./testFirebase');

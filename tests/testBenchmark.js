@@ -5,7 +5,6 @@ const sinon = require('sinon');
 
 const benchmark = require('../src/benchmark');
 
-
 describe('benchmark', () => {
   let singpath, logger;
 

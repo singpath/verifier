@@ -5,7 +5,6 @@ const sinon = require('sinon');
 
 const verifier = require('../');
 
-
 describe('firebase', () => {
 
   describe('factory', () => {

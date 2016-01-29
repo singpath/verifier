@@ -5,7 +5,6 @@ const lodashDebounce = require('lodash.debounce');
 const once = require('lodash.once');
 const asyncLib = require('async');
 
-
 const noop = () => undefined;
 
 const verifier = require('./verifier');
@@ -16,7 +15,6 @@ const DEFAULT_MAX_WORKER = 2;
 // TODO: should be saved in FB db and shared between verifiers.
 const DEFAULT_PRESENCE_DELAY = 30000;
 const DEFAULT_TASK_TIMEOUT = 6000;
-
 
 module.exports = class Queue extends events.EventEmitter {
 
@@ -509,8 +507,8 @@ module.exports = class Queue extends events.EventEmitter {
       [`${solutionPath}/meta/verified`]: true,
       [`${solutionPath}/meta/solved`]: results.solved,
       [`${taskPath}/completedAt`]: Firebase.ServerValue.TIMESTAMP,
-      [`${taskPath}/completed`]:true,
-      [`${taskPath}/consumed`]:true
+      [`${taskPath}/completed`]: true,
+      [`${taskPath}/consumed`]: true
     }).then(
       () => results
     );
@@ -523,7 +521,7 @@ module.exports = class Queue extends events.EventEmitter {
    *
    * @param  {Object} task    Task key and data
    * @param  {Object} results Task results
-   * @return {[Promise}
+   * @return {Promise}
    */
   savePullTaskResults(task, results) {
     if (!this.isWorker()) {
@@ -655,7 +653,6 @@ module.exports = class Queue extends events.EventEmitter {
   }
 
 };
-
 
 function promisedPush(ref, data) {
   try {

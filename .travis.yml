@@ -19,6 +19,7 @@ before_install:
   - 'sudo docker build -t singpath/verifier2-javascript:latest ./verifiers/javascript'
 
 script:
+  - npm run lint
   - npm test
   - npm run coveralls
   - 'sudo docker run -ti --rm -e SKIP_BUILD=1 -v /var/run/docker.sock:/var/run/docker.sock --group-add `cat /etc/group | grep "^docker" | cut -d: -f3` singpath/verifier2:latest verifier test "$(cat ./examples/tests.yaml)"'

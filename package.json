@@ -11,8 +11,9 @@
   "scripts": {
     "cover": "istanbul cover ./node_modules/mocha/bin/_mocha tests/index.js --report lcov -- -R spec",
     "coveralls": "istanbul cover ./node_modules/mocha/bin/_mocha tests/index.js --report lcovonly -- -R spec && cat ./coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js && rm -rf ./coverage",
-    "test": "eslint src/ tests/ && mocha tests/index.js",
-    "lint": "eslint src/ tests/"
+    "lint": "jscs . && eslint src/ tests/",
+    "lint-fix": "jscs . --fix",
+    "test": "mocha tests/index.js"
   },
   "author": "",
   "license": "ISC",
@@ -33,10 +34,12 @@
     "singpath-logger": "github:singpath/singpath-logger"
   },
   "devDependencies": {
+    "babel-eslint": "^5.0.0-beta6",
     "coveralls": "^2.11.4",
-    "eslint": "^1.8.0",
+    "eslint": "^1.10.3",
     "expect.js": "^0.3.1",
     "istanbul": "^0.4.1",
+    "jscs": "^2.9.0",
     "memorystream": "^0.3.1",
     "mocha": "^2.3.3",
     "mocha-lcov-reporter": "^1.0.0",

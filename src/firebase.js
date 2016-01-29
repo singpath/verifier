@@ -36,7 +36,6 @@ Firebase.prototype.observeAuth = function() {
 
 exports.RxFirebase = Firebase;
 
-
 /**
  * Create firebase service bound to one firebase ID.
  *

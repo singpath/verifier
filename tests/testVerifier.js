@@ -27,6 +27,7 @@ describe('verifier', () => {
 
       container = {
         start: sinon.stub().yields(null, {}),
+        stop: sinon.stub().yields(null, {}),
         attach: sinon.stub().yields(null, stream),
         wait: (cb) => {
           // Not setting docker log header
@@ -227,6 +228,7 @@ describe('verifier', () => {
         () => Promise.reject(new Error('unexpected')),
         e => {
           expect(e.message).to.be('Timeout');
+          sinon.assert.calledOnce(container.stop);
           sinon.assert.calledOnce(container.remove);
           sinon.assert.calledWithExactly(
             container.remove,

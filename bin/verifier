@@ -498,7 +498,7 @@ function loadSolutions(yamlString, options) {
     const language = doc.language;
     const tests = doc.tests;
     const solution = doc.solution;
-    const expected = doc.expected;
+    const expected = doc.expected || null;
 
     if (!language || !tests || !solution) {
       logger.error(

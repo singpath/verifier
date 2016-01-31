@@ -7,7 +7,7 @@ Pull verifier task from a Firebase queue and run them inside a docker container.
 
 It consists of a daemon watching for task added to
 `https://some-firebase-id.firebaseio.com/singpath/queues/default/tasks`,
-and of docker verifier images, one for each language supported. 
+and of docker verifier images, one for each language supported.
 
 A task will be run in a one-time-use container; the results will be written
 to `https://some-firebase-id.firebaseio.com/singpath/queuedSolutions/pathId/levelId/problemId/user-public-id/default/results/taskId`.
@@ -33,7 +33,7 @@ But doesn't allow to easily share the control of the machine. It's best suited
 for a verifier needing to run temporally.
 
 The `verifier-machine.py` deployment script works without `docker-machine`;
-you can use it on any server with docker 1.7+ installed and running; you 
+you can use it on any server with docker 1.7+ installed and running; you
 would just skip the docker host setup.
 
 
@@ -60,12 +60,12 @@ local machine in this example.
     ```
     export DOCKER_MACHINE_NAME=default
     ```
-    
+
 2. Create a new docker host on a local virtualbox machine:
     ```
     docker-machine create --driver virtualbox $DOCKER_MACHINE_NAME
     ```
-    
+
     If you wanted to setup a machine on Google Compute Engine instead
     just use the "google" driver:
     ```shell
@@ -95,14 +95,14 @@ docker run -d --name verifier-remote-docker \
   singpath/verifier2
 ```
 
-It is a long command line, guessing how to give the container access 
+It is a long command line, guessing how to give the container access
 to the docker daemon might be dificult and it leaves the firebase secret
 in your terminal history.
 
 You could instead:
 - run the [nodejs daemon directly](https://github.com/singpath/verifier/blob/master/CONTRIBUTING.md)
   (you would still need to give some firebase settings to the program);
-- or use 
+- or use
   [verifier-machine.py](https://github.com/singpath/verifier/blob/master/deployment/verifier-machine.py)
   to store those settings and start the daemon (see below).
 
@@ -114,7 +114,7 @@ You could instead:
   ```shell
   eval "$(docker-machine env $DOCKER_MACHINE_NAME)"
   ```
-  
+
 1. Download the `verifier-machine.py` script:
     ```shell
     curl -O https://raw.githubusercontent.com/singpath/verifier/master/deployment/verifier-machine.py
@@ -133,7 +133,7 @@ You could instead:
     it saves a verifier settings in `./.singpath-verifiers.json` as a profile.
     `./.singpath-verifiers.json` can hold settings for verifier targeting
     different Firebase db, queue or machine.
-    
+
     Note that it only needs the machine name to guess how to give the daemon
     access to docker. It won't be used by the `start` subcommand.
 

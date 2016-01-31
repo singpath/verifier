@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+#
+set -e
+
+# load settings variables
+. ./shared.env
+
+# load shared functions
+. ./shared.fn
+
+# docker machine id
+MACHINE_ID="ocean-bench"
+
+# Subcommands
+case "$1" in
+    init)
+        echo "Creating docker machine..."
+        docker-machine create --driver digitalocean \
+            --digitalocean-access-token="$SINGPATH_BENCH_DIGITALOCEAN_TOKEN" \
+            --digitalocean-size="512mb" \
+            --digitalocean-region="sfo1" \
+            $MACHINE_ID
+        
+        singpath_bench_init $MACHINE_ID
+        ;;
+
+    start)
+        singpath_bench_start $MACHINE_ID "$2"
+        ;;
+     
+    stop)
+        singpath_bench_stop $MACHINE_ID
+        ;;
+
+    rm)
+        singpath_bench_rm $MACHINE_ID
+        ;;
+     
+    *)
+        singpath_bench_help $0
+        exit 1     
+esac

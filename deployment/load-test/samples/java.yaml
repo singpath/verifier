@@ -1,0 +1,44 @@
+---
+language: java
+tests: |
+  import org.junit.Test;
+  import static org.junit.Assert.*;
+  import junit.framework.*;
+  import com.singpath.SolutionRunner;
+
+  public class SingPathTest extends SolutionRunner {
+
+    @Test
+    public void testSolution() throws Exception {
+      SingPath sp = new SingPath();
+      assertEquals(4.0, sp.add(2.0, 2.0));
+    }
+  }
+solution: |
+  public class SingPath {
+    public Double add(Double x, Double y) {
+      return x + y + 1;
+    }
+  }
+---
+language: java
+tests: |
+  import org.junit.Test;
+  import static org.junit.Assert.*;
+  import junit.framework.*;
+  import com.singpath.SolutionRunner;
+
+  public class SingPathTest extends SolutionRunner {
+
+    @Test
+    public void testSolution() throws Exception {
+      SingPath sp = new SingPath();
+      assertEquals(4.0, sp.add(2.0, 2.0));
+    }
+  }
+solution: |
+  public class SingPath {
+    public Double add(Double x, Double y) {
+      return x + y;
+    }
+  }

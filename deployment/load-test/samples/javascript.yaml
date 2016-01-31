@@ -1,0 +1,12 @@
+---
+language: javascript
+tests: |
+  test('foo === 1', () => assert.equal(1, foo));
+solution: |
+  foo = 1
+---
+language: javascript
+tests: |
+  test('foo === 1', () => assert.equal(1, foo));
+solution: |
+  foo = 0

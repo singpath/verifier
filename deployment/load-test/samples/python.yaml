@@ -1,0 +1,14 @@
+---
+language: python
+tests: |
+  >>> foo
+  1
+solution: |
+  foo = 1
+---
+language: python
+tests: |
+  >>> foo
+  1
+solution: |
+  foo = 0

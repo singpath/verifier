@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+#
+
+function singpath_bench_gid() {
+    SOCKET="/var/run/docker.sock"
+    GROUP=$(docker-machine ssh $1 'ls -l '$SOCKET' | awk '"'{ print "'$4'" }'"'')
+    GID=$(docker-machine ssh $1 'cat /etc/group | grep "^'$GROUP':" | cut -d: -f3')
+    echo $GID
+}
+
+function singpath_bench_init() {
+    eval "$(docker-machine env $1)"
+
+    echo "Pulling verifier images..."
+    docker pull singpath/verifier2
+    docker pull singpath/verifier2-java
+    docker pull singpath/verifier2-python
+    docker pull singpath/verifier2-javascript
+}
+
+function singpath_bench_start() {
+    eval "$(docker-machine env $1)"
+
+    echo "Retrieving remote docker GID..."
+    DOCKER_GID=$(singpath_bench_gid $1)
+    
+    echo "Starting verifier..."
+    docker run -d --name $SINGPATH_BENCH_CONTAINER_NAME \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        --group-add $DOCKER_GID \
+        -e SINGPATH_FIREBASE_SECRET="$SINGPATH_BENCH_FIREBASE_AUTH_SECRET" \
+        -e SINGPATH_FIREBASE_QUEUE="$SINGPATH_BENCH_FIREBASE_QUEUE_URL" \
+        -e SINGPATH_MAX_WORKER="$SINGPATH_BENCH_MAX_WORKER" \
+        -e SINGPATH_IMAGE_TAG="$SINGPATH_BENCH_VERIFIER_TAG" \
+        -e SKIP_BUILD=1 \
+        singpath/verifier2 \
+        /app/bin/verifier run
+
+    echo "letting verifier settle..."
+    sleep 5
+
+    echo "Starting benchmark..."
+    if [[ -n "$2" ]]; then
+        docker run -ti --rm \
+            -e SINGPATH_FIREBASE_SECRET="$SINGPATH_BENCH_FIREBASE_AUTH_SECRET" \
+            -e SINGPATH_FIREBASE_QUEUE="$SINGPATH_BENCH_FIREBASE_QUEUE_URL" \
+            -e SKIP_BUILD=1 \
+            singpath/verifier2 \
+            /app/bin/verifier benchmark -c $SINGPATH_BENCH_TEST_COUNT --payload "$2"
+    else
+        docker run -ti --rm \
+            -e SINGPATH_FIREBASE_SECRET="$SINGPATH_BENCH_FIREBASE_AUTH_SECRET" \
+            -e SINGPATH_FIREBASE_QUEUE="$SINGPATH_BENCH_FIREBASE_QUEUE_URL" \
+            -e SKIP_BUILD=1 \
+            singpath/verifier2 \
+            /app/bin/verifier benchmark -c $SINGPATH_BENCH_TEST_COUNT
+    fi
+}
+
+function singpath_bench_stop() {
+    eval "$(docker-machine env $1)"
+
+    docker stop $SINGPATH_BENCH_CONTAINER_NAME || echo "Failed to stop container"
+    docker rm -f $SINGPATH_BENCH_CONTAINER_NAME || echo "Failed to remove container"
+}
+
+function singpath_bench_rm() {
+    docker-machine rm $1
+}
+
+function singpath_bench_help() {
+    echo $"Usage: $1 {init|start|stop|rm} [SAMPLES]"
+    echo ""
+    echo "Example:"
+    echo $"    cp ./shared.env.tmpl ./shared.env"
+    echo $"    $1 init"
+    echo '    '$1' start "$(< samples/python.yaml)"'
+    echo $"    $1 stop"
+    echo '    '$1' start "$(< samples/java.yaml)"'
+    echo $"    $1 stop"
+    echo '    '$1' start "$(< samples/javascript.yaml)"'
+    echo $"    $1 rm"
+}

@@ -46,7 +46,7 @@ DEFAULT_SETTINGS = {
     FB_ID_KEY: 'singpath-play',
     FB_QUEUE_KEY: 'default',
     FB_SECRET_KEY: None,
-    MACHINE_ID_KEY: 'default',
+    MACHINE_ID_KEY: None,
     DOCKER_GID_KEY: None,
     MAX_WORKER_KEY: '1',
     VERIFIER_TAG_KEY: 'latest'
@@ -55,7 +55,7 @@ DEFAULT_SETTINGS = {
 SOCKET_PATH = '/var/run/docker.sock'
 SSH_CMD = ("""
 export DOCKER_GROUP_NAME=`ls -l %s | awk '{ print $4 }'`;
-cat /etc/group | grep "^$DOCKER_GROUP_NAME" | cut -d: -f3
+cat /etc/group | grep "^${DOCKER_GROUP_NAME}:" | cut -d: -f3
 """ % SOCKET_PATH).replace('\n', ' ').strip()
 
 
@@ -145,6 +145,7 @@ class Settings(object):
         subparsers = parser.add_subparsers()
         self.pull_parser(subparsers)
         self.init_parser(subparsers)
+        self.docker_gid_parser(subparsers)
         self.start_parser(subparsers)
         self.stop_parser(subparsers)
         self.push_parser(subparsers)
@@ -170,6 +171,7 @@ class Settings(object):
         )
 
     def init_parser(self, subparsers):
+        self.docker_gid_parser(subparsers)
         parser = subparsers.add_parser(
             'init',
             help='configure verifier',
@@ -195,6 +197,17 @@ class Settings(object):
             docker_gid=self.get(DOCKER_GID_KEY),
             max_worker=self.get(MAX_WORKER_KEY),
             verifier_tag=self.get(VERIFIER_TAG_KEY),
+        )
+
+    def docker_gid_parser(self, subparsers):
+        parser = subparsers.add_parser(
+            'docker-gid',
+            help='get the docker socket GID',
+        )
+        parser.add_argument('-m', '--machine-id')
+        parser.set_defaults(
+            func=docker_gid,
+            machine_id=self.get(MACHINE_ID_KEY)
         )
 
     def start_parser(self, subparsers):
@@ -277,6 +290,25 @@ def init(opts):
     set_socket_id(settings, opts)
 
     Settings.save(opts.profile_id, settings)
+
+
+def docker_gid(opts):
+    gid = local_socket_gid()
+    if gid:
+        print(gid)
+        return
+
+    if not opts.machine_id:
+        logging.error('No local docker and no machine id provided')
+        exit(1)
+
+    gid = remote_socket_gid(opts.machine_id)
+    if gid:
+        print(gid)
+        return
+
+    logging.error('No docker socket found on the remote machine')
+    exit(1)
 
 
 def start(opts):

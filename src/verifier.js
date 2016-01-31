@@ -240,13 +240,13 @@ function containerOptions(payload, tag) {
     'Image': `${verifierImages[payload.language].name}:${tag}`,
     'HostConfig': {
       'CapDrop': ['All'],
-      'NetworkMode': 'none',
-      'LogConfig': {
-        'Type': 'syslog',
-        'Config': {
-          'tag': `'verifier-${payload.language}'`
-        }
-      }
+      // 'LogConfig': {
+      //   'Type': 'syslog',
+      //   'Config': {
+      //     'tag': `'verifier-${payload.language}'`
+      //   }
+      // },
+      'NetworkMode': 'none'
     }
   };
 }

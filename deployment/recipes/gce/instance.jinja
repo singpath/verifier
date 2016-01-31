@@ -31,28 +31,20 @@ resources:
         value: |
           #!/bin/bash
 
+          export SINGPATH_CONTAINER=verifier
+
           function getMetaData() {
             curl http://metadata.google.internal/computeMetadata/v1/instance/attributes/$1 -H "Metadata-Flavor: Google"
           }
 
-          export DEBIAN_FRONTEND=noninteractive
-          export SINGPATH_CONTAINER=verifier
-
-          sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-          echo "deb https://apt.dockerproject.org/repo ubuntu-trusty main" | sudo tee /etc/apt/sources.list.d/docker.list
-          sudo apt-get update
-          sudo apt-get purge -y lxc-docker
-          sudo apt-get install -y linux-image-extra-$(uname -r)
-          sudo apt-get install -y docker-engine
-          sudo service docker start
-          docker -v
-          sudo docker ps -a
-          sudo docker rm -f "$SINGPATH_CONTAINER"
+          curl -sSL https://get.docker.com/ | sh
+          sudo docker rm -f $(sudo docker ps -aq)
 
           sudo mkdir -p /etc/singpath
-          export DOCKER_GROUP_ID=`cat /etc/group | grep "^docker" | cut -d: -f3`
+          export DOCKER_GROUP_ID=`cat /etc/group | grep "^docker:" | cut -d: -f3`
           export SINGPATH_FIREBASE_SECRET="$(getMetaData singpath-secret)"
-          export SINGPATH_FIREBASE_QUEUE="$(getMeta singpath-endpoint)"
+          export SINGPATH_FIREBASE_QUEUE="$(getMetaData singpath-endpoint)"
+          export SINGPATH_MAX_WORKER="2"
           env | grep ^SINGPATH | sudo dd of=/etc/singpath/env.file
           echo "SKIP_BUILD=1" | sudo tee -a /etc/singpath/env.file
 

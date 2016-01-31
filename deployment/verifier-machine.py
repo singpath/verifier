@@ -228,6 +228,7 @@ class Settings(object):
         parser.add_argument('-t', '--verifier-tag')
         parser.add_argument('-c', '--max-worker')
         parser.add_argument('-i', '--interactive', action='store_true')
+        parser.add_argument('-k', '--skip-build', action='store_true')
         parser.set_defaults(
             func=start,
             firebase_id=self.get(FB_ID_KEY),
@@ -340,9 +341,9 @@ def start(opts):
         '-e', 'SINGPATH_FIREBASE_QUEUE=%s' % queue_url,
         '-e', 'SINGPATH_MAX_WORKER=%s' % opts.max_worker,
         '-e', 'SINGPATH_IMAGE_TAG=%s' % opts.verifier_tag,
-        '-e', 'SKIP_BUILD=0',
+        '-e', 'SKIP_BUILD=%s' % 1 if opts.skip_build else 0,
         'singpath/verifier2',
-        '/app/bin/verifier'
+        '/app/bin/verifier',
     ]
 
     if opts.level == logging.DEBUG:

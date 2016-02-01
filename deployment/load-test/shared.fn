@@ -36,7 +36,7 @@ function singpath_bench_start() {
         singpath/verifier2 \
         /app/bin/verifier run
 
-    echo "letting verifier settle..."
+    echo "Giving verifier 5s to settle..."
     sleep 5
 
     echo "Starting benchmark..."

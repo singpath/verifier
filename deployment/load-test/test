@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-#
-
-SOCKET="/var/run/docker.sock"
-GROUP=$(docker-machine ssh default 'ls -l '$SOCKET' | awk '"'{ print "'$4'" }'"'')
-GID=$(docker-machine ssh default 'cat /etc/group | grep "^'$GROUP':" | cut -d: -f3')
-echo $GID

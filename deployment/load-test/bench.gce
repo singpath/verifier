@@ -17,9 +17,11 @@ case "$1" in
         echo "Creating docker machine..."
         docker-machine create --driver google \
             --google-project $SINGPATH_BENCH_GCE_PROJECT \
-            --google-zone us-central1-a \
-            --google-machine-type n1-standard-1 \
-            --google-disk-size 250 \
+            --google-zone $SINGPATH_BENCH_GCE_ZONE \
+            --google-machine-image $SINGPATH_BENCH_GCE_MACHINE_IMAGE \
+            --google-machine-type $SINGPATH_BENCH_GCE_MACHINE_TYPE \
+            --google-disk-type $SINGPATH_BENCH_GCE_DISK_TYPE \
+            --google-disk-size $SINGPATH_BENCH_GCE_DISK_SIZE \
             $MACHINE_ID
         
         singpath_bench_init $MACHINE_ID

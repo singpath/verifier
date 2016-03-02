@@ -216,14 +216,11 @@ const CMDS = [{
       process.exit(132);
     }
 
-    verifier.dockerClient(opts).then(client => {
+    return verifier.dockerClient(opts).then(client => {
       return testSolutions(client, solutions, opts.imageTag, logger);
     }).then(
       () => logger.info('Tests run successfully.')
-    ).catch(err => {
-      logger.error('%s', err.toString());
-      process.exit(133);
-    });
+    );
   }
 }, {
   name: 'benchmark',

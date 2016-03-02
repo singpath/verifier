@@ -374,9 +374,13 @@ module.exports = class Queue extends events.EventEmitter {
       worker: this.authData.uid,
       started: true,
       startedAt: Firebase.ServerValue.TIMESTAMP
-    }).then(
-      () => this.logger.info('Task ("%s") claimed.', task.key)
-    ).catch(err => {
+    }).then(() => {
+      () => this.logger.info('Task ("%s") claimed.', task.key);
+
+      if (task.data) {
+        task.data.worker = this.authData.uid;
+      }
+    }).catch(err => {
       this.logger.debug('Failed to claim task ("%s"): %s', task.key, err.toString());
       return Promise.reject(err);
     });

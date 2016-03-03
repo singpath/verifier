@@ -1,3 +1,5 @@
+examples ?= `cat examples/stdout.yaml`
+
 default: build
 
 build:
@@ -14,3 +16,10 @@ test: build
 		-e CLASSPATH="/app/lib/*:/app/build/dist:/app/build/tests" \
 		singpath/verifier2-java:latest \
 		java org.junit.runner.JUnitCore com.singpath.TestSuite
+
+example: build
+	docker run -ti --rm \
+		--net="none" \
+		--cap-drop=ALL \
+		singpath/verifier2-java:latest \
+		verify "$(examples)"

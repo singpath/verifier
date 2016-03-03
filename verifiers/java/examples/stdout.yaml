@@ -1,0 +1,22 @@
+---
+tests: |
+  import org.junit.Test;
+  import static org.junit.Assert.*;
+  import junit.framework.*;
+  import com.singpath.SolutionRunner;
+
+  public class SingPathTest extends SolutionRunner {
+
+    @Test
+    public void testCapitalize() throws Exception {
+      SingPath sp = new SingPath();
+      assertEquals("Hello Java" , sp.hello());
+    }
+  }
+solution: |
+  public class SingPath {
+    public String hello(){
+        System.out.println("Hello Java");
+        return "";
+    }
+  }

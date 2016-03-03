@@ -9,6 +9,7 @@ import org.junit.runner.Result;
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
+import java.io.PrintStream;
 import java.nio.charset.Charset;
 
 public class SolutionRunner extends TestCase {
@@ -31,11 +32,27 @@ public class SolutionRunner extends TestCase {
             return new Response(new String(out.toByteArray(), Charset.forName("UTF-8")));
         }
 
+        PrintStream oldOut = System.out;
+        PrintStream oldErr = System.err;
+
         try {
+            ByteArrayOutputStream pipeOut = new ByteArrayOutputStream();
+            ByteArrayOutputStream pipeErr = new ByteArrayOutputStream();
+
+            System.setOut(new PrintStream(pipeOut));
+            System.setErr(new PrintStream(pipeErr));
+
             Class<?> k = compiler.find(TEST_CLASS_NAME);
             Result result = JUnitCore.runClasses(k);
+
+            System.setOut(oldOut);
+            System.setErr(oldErr);
+
             return new Response(result);
         } catch (ClassNotFoundException e) {
+            System.setOut(oldOut);
+            System.setErr(oldErr);
+
             e.printStackTrace();
             return new Response(errCompileError);
         }
